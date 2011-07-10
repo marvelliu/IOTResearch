@@ -1,0 +1,4 @@
+对adov进行修改，在发送aodv-request的数据包中，添加数据包的标签。
+
+
+小世界模型在自组织的ad-hoc网络中研究过，如Friend Assisted Path Discovery (FAPD)【Self-Organization in Mobile Ad Hoc Networks: The Approach of Terminodes】，主要是辅助
