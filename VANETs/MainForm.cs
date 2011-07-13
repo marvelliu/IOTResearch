@@ -234,7 +234,9 @@ namespace VANETs
         {
             Global global = Global.getInstance();
             EventGenerator generator = new EventGenerator();
-            generator.GenerateRandomObjectMotionEvents(true, true, 30, 5, global.objectNum, NodeType.OBJECT, global.eventsFileName);
+            generator.GenerateRandomObjectMotionEvents(true, 30, 5, global.objectNum, NodeType.OBJECT, global.eventsFileName);
+            EventManager manager = new EventManager();
+            manager.LoadEvents(true);
         }
 
         private void reloadEventsToolStripMenuItem_Click(object sender, EventArgs e)

@@ -620,6 +620,11 @@ namespace AdHocBaseApp
                 return null;
         }
 
+        public bool ExistInNeighborTable(int dst)
+        {
+            return this.Neighbors.ContainsKey(dst)
+                && scheduler.currentTime - this.Neighbors[dst].lastBeacon < global.beaconInterval;
+        }
 
         public bool ExistInRouteTable(int dst)
         {

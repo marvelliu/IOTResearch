@@ -183,5 +183,11 @@ namespace AdHocBaseApp
             return result;
 
         }
+
+        public static void AddTo(List<object> from, List<object> to)
+        {
+            foreach (object f in from)
+                to.Add(f);
+        }
     }
 }

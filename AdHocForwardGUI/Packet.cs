@@ -114,13 +114,15 @@ namespace AdHocBaseApp
         public int origSrc;
         public PacketType origType;
         public int origSenderSeq;
+        public int ttl;
 
-        public SWRequestField(int origSrc, int origDst, int origSenderSeq, PacketType origType)
+        public SWRequestField(int origSrc, int origDst, int origSenderSeq, PacketType origType, int ttl)
         {
             this.origSrc = origSrc;
             this.origDst = origDst;
             this.origSenderSeq = origSenderSeq;
             this.origType = origType;
+            this.ttl = ttl;
         }
     }
 

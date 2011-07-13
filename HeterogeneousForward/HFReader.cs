@@ -50,14 +50,17 @@ namespace HeterogeneousForward
     {
         public List<ForwardStrategy> ForwardStrategies;
         public List<SWHubCandidate> MaxSWHubCandidates;
-        public HFBeaconData(List<ForwardStrategy> f, List<SWHubCandidate> n)
+        public Dictionary<int, PingedSWHub> PingedSwHubs;
+        public HFBeaconData(List<ForwardStrategy> f, List<SWHubCandidate> n, Dictionary<int, PingedSWHub> p)
         {
             this.ForwardStrategies = f;
             this.MaxSWHubCandidates = n;
+            this.PingedSwHubs = p;
         }
     }
 
-    class PingedSWHub
+    [Serializable]
+    public class PingedSWHub
     {
         public int hops;
         public uint tags;
@@ -134,7 +137,7 @@ namespace HeterogeneousForward
             // to itself
             if (pkg.Dst == Id && pkg.DstType == NodeType.READER)
             {
-                Console.WriteLine("{0:F4} [{1}] {2}{3}->{4}{5}, total: {6}", scheduler.currentTime, pkg.Type, pkg.SrcType, pkg.Src, this.type, this.Id, scheduler.currentTime - pkg.beginSentTime);
+                Console.WriteLine("{0:F4} [{1}] {2}{3}->{4}{5}, total: {6}, {7}", scheduler.currentTime, pkg.Type, pkg.SrcType, pkg.Src, this.type, this.Id, scheduler.currentTime - pkg.beginSentTime, pkg.getId());
                 //
                 //SendPacketDirectly(scheduler.currentTime, pkg);
                 return true;
@@ -165,21 +168,24 @@ namespace HeterogeneousForward
             if (pkg.Type != PacketType.DATA && pkg.Type != PacketType.SW_REQUEST)
                 throw new Exception("not DATA or type!");
             //Check Route Table
-            if (this.Neighbors.ContainsKey(dst))
+            if (ExistInNeighborTable(dst))
             {
                 SWHubCandidate c = GetSWHubCandidate(dst);
-                if (c == null)
-                    throw new Exception("Neighor not exist in HubCandidates");
-                if (IsAllowedTags(c.tagEntity.allowTags, pkg.Tags))
+                //当节点运动的时候，可能没有接收到HubCandidates数据，此时放弃直接转发
+                if (c != null)
                 {
-                    this.retryOnSendingFailture = true;
-                    pkg.Next = c.nodeId;
-                    SendPacketDirectly(scheduler.currentTime, pkg);
-                    this.retryOnSendingFailture = false;
+                    //throw new Exception(string.Format("Neighor reader{0} not exist in reader{1}'s HubCandidates", dst, this.Id));
+                    if (IsAllowedTags(c.tagEntity.allowTags, pkg.Tags))
+                    {
+                        this.retryOnSendingFailture = true;
+                        pkg.Next = c.nodeId;
+                        SendPacketDirectly(scheduler.currentTime, pkg);
+                        this.retryOnSendingFailture = false;
+                    }
+                    else
+                        Console.WriteLine("Error: reader{0} not accept packet!", dst);
+                    return;
                 }
-                else
-                    Console.WriteLine("Error: reader{0} not accept packet!", dst);
-                return;
             }
 
             //是否为某个swHub
@@ -424,7 +430,7 @@ namespace HeterogeneousForward
         {
             //这里借用AODVRequest字段存放数据包的目的地
             Packet pkg1 = (Packet)pkg.Clone();
-            pkg1.SWRequest = new SWRequestField(pkg.Src, pkg.Dst, pkg.PacketSeq, pkg.Type);
+            pkg1.SWRequest = new SWRequestField(pkg.Src, pkg.Dst, pkg.PacketSeq, pkg.Type, global.swTTL);
             pkg1.Dst = dstId;
             pkg1.Next = nextId;
             pkg1.Src = this.Id;
@@ -444,7 +450,7 @@ namespace HeterogeneousForward
             if (pkg.Dst != this.Id)
             {
                 this.retryOnSendingFailture = true;
-                RoutePacket(pkg);
+                SendSWData(pkg);
                 this.retryOnSendingFailture = false;
                 return;
             }
@@ -452,7 +458,7 @@ namespace HeterogeneousForward
             pkg.Dst = pkg.SWRequest.origDst;
             pkg.Type = pkg.SWRequest.origType;
             pkg.PacketSeq = pkg.SWRequest.origSenderSeq;
-            pkg.TTL = global.innerSWTTL;
+            pkg.TTL = pkg.SWRequest.ttl;
 
             string packetId = pkg.getId();
             if (this.receivedSWPackets.Contains(packetId))
@@ -489,8 +495,15 @@ namespace HeterogeneousForward
                 this.swHubCandidates.RemoveAt(this.swHubCandidates.Count-1);
             }
             int max = Math.Min(global.maxNearCandidateNum, this.swHubCandidates.Count);
-            for (int i = 0; i < max; i++)
+            for (int i = 0; i < max; i++){
+                if(this.swHubCandidates[i].nodeId == this.Id)
+                    throw new Exception("this.swHubCandidates[i].nodeId is equal to reader"+this.Id);
                 result.Add(this.swHubCandidates[i]);
+            }
+            if(max >0 && result[max - 1].tagEntity.allowedTagNum <= this.availTagEntity.allowedTagNum){
+                result.RemoveAt(max - 1);
+                result.Add(new SWHubCandidate(this.Id, this.availTagEntity, 0));
+            }
             return result;
         }
 
@@ -575,7 +588,46 @@ namespace HeterogeneousForward
                     pkg.Beacon.gatewayEntities[i++] = new GatewayEntity(g, this.Id, this.gatewayEntities[g].hops);
                 }
             }
-            pkg.Data = new HFBeaconData(this.forwardStrategies, GetNearMaxCandidates());
+
+            //swHub部分
+            //计算自己允许的tag数，计算一次即可
+            if (this.availTagEntity == null)
+            {
+                this.availTagEntity = CaculateTagEntity(this.forwardStrategies);
+            }
+            //如果自己可允许的tag比其他节点多，且大于一个阈值，则将自己作为hub
+            List<SWHubCandidate> temp = new List<SWHubCandidate>();
+            foreach (SWHubCandidate c in this.swHubCandidates)
+            {
+                if (c.tagEntity.allowedTagNum >= global.minSWHubRequiredTags)
+                    temp.Add(c);
+            }
+            //理论上swHubCandidates和temp都是排好序的列表
+            int n = Math.Min(temp.Count, global.choosenNearCandidateNum);
+            if ( this.isSwHub == false
+                && global.currentSWHubNumber < global.swHubRatio * global.readerNum && global.currentSWHubNumber < global.maxSwHubs
+                && this.Neighbors.Count > global.minSwHubNeighbors
+                && n > 0 && this.availTagEntity.allowedTagNum >= this.swHubCandidates[n - 1].tagEntity.allowedTagNum
+                && this.availTagEntity.allowedTagNum >= global.minSwHubAvailTagThrethold
+                )//自己可以是swhub
+            {
+                Console.WriteLine("Reader{0} set itself as a swHub", this.Id);
+                this.isSwHub = true;
+                global.currentSWHubNumber++;
+            }
+
+            Dictionary<int, PingedSWHub> p = new Dictionary<int, PingedSWHub>();
+            foreach (int dst in this.cachedPingedSWHubs.Keys)
+            {
+                PingedSWHub nextEntity = getMaxTagFromPingedSwHub(this.cachedPingedSWHubs[dst]);
+                if (nextEntity != null)
+                    p.Add(dst, new PingedSWHub(nextEntity.hops, nextEntity.tags, nextEntity.time));
+            }
+
+            if (this.isSwHub == true)
+                p.Add(this.Id, new PingedSWHub(0, this.availTagEntity.allowTags, scheduler.currentTime));
+
+            pkg.Data = new HFBeaconData(this.forwardStrategies, GetNearMaxCandidates(), p);
             SendPacketDirectly(time, pkg);
 
             float nextBeacon = 0;
@@ -584,6 +636,30 @@ namespace HeterogeneousForward
             else
                 nextBeacon = (float)(Utility.P_Rand(10 * global.beaconInterval) / 10);
             Event.AddEvent(new Event(scheduler.currentTime + nextBeacon, EventType.SND_BCN, this, null));
+        }
+
+        public PingedSWHub getMaxTagFromPingedSwHub(Dictionary<int, PingedSWHub> p)
+        {
+            uint tags = 0;
+            PingedSWHub nextEntity = null;
+            //从p中获得最大的tags
+            foreach (int n in p.Keys)
+            {
+                PingedSWHub h = p[n];
+                /*
+                bool s = (scheduler.currentTime - h.time < global.beaconInterval && scheduler.currentTime > global.beaconWarming)
+                    || (scheduler.currentTime - h.time < global.beaconWarmingInterval && scheduler.currentTime <= global.beaconWarming);
+                if( s || h.hops >global.innerSWTTL)
+                 * */
+                if (h.hops > global.innerSWTTL)
+                    continue;
+                if((h.tags | tags) == h.tags)
+                {
+                    tags = h.tags;
+                    nextEntity = h;
+                }
+            }
+            return nextEntity;
         }
 
         public override void RecvBeacon(Packet pkg)
@@ -596,7 +672,8 @@ namespace HeterogeneousForward
                 HFNeighbor nb = null;
                 if (Neighbors.ContainsKey(node.Id))
                     nb = (HFNeighbor)Neighbors[node.Id];
-                if (nb == null || nb.lastBeacon < 0)
+                //if (nb == null || nb.lastBeacon < 0)
+                if (nb == null)
                     return;
                 HFBeaconData data = (HFBeaconData)pkg.Data;
                 List<ForwardStrategy> fs = data.ForwardStrategies;
@@ -649,6 +726,27 @@ namespace HeterogeneousForward
                         this.swHubCandidates.Add(c2);
                     }
                 }
+
+                Dictionary<int, PingedSWHub> pingedSwHubs = data.PingedSwHubs;
+                foreach (int dst in pingedSwHubs.Keys)
+                {
+                    if (this.Id == dst)
+                        continue;
+                    PingedSWHub hub = pingedSwHubs[dst];
+                    if (hub.hops > global.outerSWTTL) //太远了也忽略
+                        continue;
+                    if (!this.cachedPingedSWHubs.ContainsKey(dst))
+                        this.cachedPingedSWHubs.Add(dst, new Dictionary<int, PingedSWHub>());
+                    if (!this.cachedPingedSWHubs[dst].ContainsKey(pkg.Prev))
+                        this.cachedPingedSWHubs[dst].Add(pkg.Prev, new PingedSWHub(hub.hops + 1, hub.tags, scheduler.currentTime));
+                    else
+                    {
+                        this.cachedPingedSWHubs[dst][pkg.Prev].hops = hub.hops + 1;
+                        this.cachedPingedSWHubs[dst][pkg.Prev].tags = hub.tags;
+                        this.cachedPingedSWHubs[dst][pkg.Prev].time = scheduler.currentTime;
+                    }
+                }
+
             }
         }
 
@@ -701,8 +799,10 @@ namespace HeterogeneousForward
             }
             //理论上swHubCandidates和temp都是排好序的列表
             int n = Math.Min(temp.Count, global.choosenNearCandidateNum);
-            if (global.currentSWHubNumber < global.swHubRatio * global.readerNum && global.currentSWHubNumber < global.maxSwHubs
-                && this.Neighbors.Count > global.minSwHubNeighbors
+            if (
+                global.currentSWHubNumber < global.swHubRatio * global.readerNum 
+                && global.currentSWHubNumber < global.maxSwHubs
+                //&& this.Neighbors.Count > global.minSwHubNeighbors
                 && n > 0 && this.availTagEntity.allowedTagNum >= this.swHubCandidates[n - 1].tagEntity.allowedTagNum
                 && this.availTagEntity.allowedTagNum >= global.minSwHubAvailTagThrethold
                 && this.isSwHub == false)//自己可以是swhub
@@ -710,20 +810,6 @@ namespace HeterogeneousForward
                 Console.WriteLine("Reader{0} set itself as a swHub", this.Id);
                 this.isSwHub = true;
                 global.currentSWHubNumber++;
-
-                /*
-                for (int i = 0; i < n; i++)
-                {
-                    SWHubCandidate c = temp[i];
-                    if (!ExistInRouteTable(c.nodeId))
-                        SendPingRequest(c.nodeId);
-                    else
-                    {
-                        RouteEntity r = this.routeTable[c.nodeId];
-                        if (scheduler.currentTime - r.remoteLastUpdatedTime > 10 || scheduler.currentTime - r.localLastUpdatedTime > 5)
-                            SendPingRequest(c.nodeId);
-                    }
-                }*/
             }
             if(this.isSwHub == true)
                 SendPingRequest(Node.BroadcastNode.Id);

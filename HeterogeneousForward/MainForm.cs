@@ -122,7 +122,7 @@ namespace HeterogeneousForward
                     brush = new SolidBrush(Color.Black);
 
                 gc.DrawString("R"+reader.Id.ToString(), new Font("arial", 10), brush,
-                    (float)reader.X + offsetX, (float)reader.Y + offsetY);
+                    (float)reader.X + (float)offsetX, (float)reader.Y + (float)offsetY);
                 if (reader.IsGateway)
                     brush = new SolidBrush(Color.Black);
 
@@ -172,7 +172,9 @@ namespace HeterogeneousForward
             File.Copy(global.eventsFileName, filename, true);
             if (clear)
                 generator.ClearEvents(filename, "MOV");
-            generator.GenerateRandomObjectMotionEvents(true, true, nodeSpeed, eventCount, nodeCount, NodeType.READER, filename);
+            generator.GenerateRandomObjectMotionEvents(true, nodeSpeed, eventCount, nodeCount, NodeType.READER, filename);
+            HFEventManager manager = new HFEventManager();
+            manager.LoadEvents(clear);
             MessageBox.Show("Done");
         }
 
@@ -192,7 +194,7 @@ namespace HeterogeneousForward
             EventGenerator generator = new EventGenerator();
             if (clear)
                 generator.ClearEvents(global.eventsFileName, "MOV");
-            generator.GenerateRandomObjectMotionEvents(true, false, nodeSpeed, eventCount, nodeCount, NodeType.OBJECT, global.eventsFileName);
+            generator.GenerateRandomObjectMotionEvents(true, nodeSpeed, eventCount, nodeCount, NodeType.OBJECT, global.eventsFileName);
             MessageBox.Show("Done");
         }
 

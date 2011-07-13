@@ -185,7 +185,9 @@ namespace LocationPrivacy
             File.Copy(global.eventsFileName, filename, true);
             if (clear)
                 generator.ClearEvents(filename, "MOV");
-            generator.GenerateRandomObjectMotionEvents(true, true, nodeSpeed, eventCount, nodeCount, NodeType.READER, filename);
+            generator.GenerateRandomObjectMotionEvents(true, nodeSpeed, eventCount, nodeCount, NodeType.READER, filename);
+            PrivacyEventManager manager = new PrivacyEventManager();
+            manager.LoadEvents(true);
             MessageBox.Show("Done");
         }
 
@@ -205,7 +207,7 @@ namespace LocationPrivacy
             EventGenerator generator = new EventGenerator();
             if (clear)
                 generator.ClearEvents(global.eventsFileName, "MOV");
-            generator.GenerateRandomObjectMotionEvents(true, false, nodeSpeed, eventCount, nodeCount, NodeType.OBJECT, global.eventsFileName);
+            generator.GenerateRandomObjectMotionEvents(true, nodeSpeed, eventCount, nodeCount, NodeType.OBJECT, global.eventsFileName);
             MessageBox.Show("Done");
         }
 

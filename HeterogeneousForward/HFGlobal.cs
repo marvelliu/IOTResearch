@@ -22,10 +22,12 @@ namespace HeterogeneousForward
         public int minSWHubRequiredTags = 5;
         public int minSwHubAvailTagThrethold = 9;
         public int minSwHubNeighbors = 5;
-        public int maxSwHubs = 6;
+        public int maxSwHubs = 10;
 
         public int innerSWTTL = 3;
         public int outerSWTTL = 4;
+
+        public int swTTL = 3;
 
         public double swHubRatio = 0.1;
         public int currentSWHubNumber = 0;

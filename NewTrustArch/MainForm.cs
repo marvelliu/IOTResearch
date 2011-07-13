@@ -191,7 +191,9 @@ namespace NewTrustArch
             EventGenerator generator = new EventGenerator();
             if (clear)
                 generator.ClearEvents(global.eventsFileName, "MOV");
-            generator.GenerateRandomObjectMotionEvents(true, true, nodeSpeed, eventCount, nodeCount, NodeType.READER, global.eventsFileName);
+            generator.GenerateRandomObjectMotionEvents(true, nodeSpeed, eventCount, nodeCount, NodeType.READER, global.eventsFileName);
+            IOTEventManager manager = new IOTEventManager();
+            manager.LoadEvents(clear);
             MessageBox.Show("Done");
         }
 
@@ -211,7 +213,7 @@ namespace NewTrustArch
             EventGenerator generator = new EventGenerator();
             if (clear)
                 generator.ClearEvents(global.eventsFileName, "MOV");
-            generator.GenerateRandomObjectMotionEvents(true, false, nodeSpeed, eventCount, nodeCount, NodeType.OBJECT, global.eventsFileName);
+            generator.GenerateRandomObjectMotionEvents(true, nodeSpeed, eventCount, nodeCount, NodeType.OBJECT, global.eventsFileName);
             MessageBox.Show("Done");
         }
 
