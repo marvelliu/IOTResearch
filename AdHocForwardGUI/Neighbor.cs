@@ -9,7 +9,6 @@ namespace AdHocBaseApp
     {
         public Reader node;
         public float lastBeacon;
-        public int hops;
 
         public Neighbor(Reader node)
         {

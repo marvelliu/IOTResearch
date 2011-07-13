@@ -15,19 +15,19 @@ namespace HeterogeneousForward
     [Serializable]
     public class ForwardStrategy
     {
-        public ulong Tags;
+        public uint Tags;
         public ForwardStrategyAction Action;
 
         public ForwardStrategy()
         {
             unchecked
             {
-                this.Tags = (ulong)-1; //default
+                this.Tags = (uint)-1; //default
                 this.Action = ((HFGlobal)Global.getInstance()).defaultForwardStrategyAction ;
             }
         }
 
-        public ForwardStrategy(ulong tags, ForwardStrategyAction action)
+        public ForwardStrategy(uint tags, ForwardStrategyAction action)
         {
             this.Tags = tags;
             this.Action = action;

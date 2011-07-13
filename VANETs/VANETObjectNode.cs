@@ -8,6 +8,8 @@ namespace VANETs
 {
     class VANETObjectNode:ObjectNode
     {
+        private Global global;
+
         new public static VANETObjectNode ProduceObjectNode(int id)
         {
             return new VANETObjectNode(id);
@@ -17,6 +19,7 @@ namespace VANETs
         protected VANETObjectNode(int id)
             : base(id)
         {
+            this.global = Global.getInstance();
             int[] key = new int[32];
             key[0] = (int)NodeType.OBJECT;
             key[1] = id;

@@ -113,11 +113,13 @@ namespace AdHocBaseApp
         public int origDst;
         public int origSrc;
         public PacketType origType;
+        public int origSenderSeq;
 
-        public SWRequestField(int origSrc, int origDst, PacketType origType)
+        public SWRequestField(int origSrc, int origDst, int origSenderSeq, PacketType origType)
         {
             this.origSrc = origSrc;
             this.origDst = origDst;
+            this.origSenderSeq = origSenderSeq;
             this.origType = origType;
         }
     }
@@ -728,7 +730,7 @@ namespace AdHocBaseApp
 
         public string getId()
         {
-            return this.SrcType + this.Src + "-" + this.DstType + this.Dst + ":" + this.PacketSeq;
+            return this.SrcType.ToString() + this.Src + "-" + this.DstType.ToString() + this.Dst + ":" + this.PacketSeq;
         }
                 
         public static bool PacketHeadEqual(Packet a, Packet b)

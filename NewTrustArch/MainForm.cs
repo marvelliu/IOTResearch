@@ -23,11 +23,11 @@ namespace NewTrustArch
         void Init()
         {
             //Console.Out.WriteLine("Program Starts...");
-            Global global = Global.getInstance();
+            IOTGlobal global = (IOTGlobal)Global.getInstance();
             IOTOrganization.GenerateNodes();
             IOTOrganization.GenerateOrganizations();
             IOTOrganization.GenerateNodePositionsAllRandom();
-            ((IOTGlobal)global).trustManager = ((IOTGlobal)global).trustManagerConstructor();
+            global.trustManager = global.trustManagerConstructor();
             IOTEventManager handler = new IOTEventManager();
             handler.LoadEvents(false);
             IOTReader.SetReaderTypes();

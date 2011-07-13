@@ -22,6 +22,7 @@ namespace LogicalPath
 
     class LogicalPathReader : Reader
     {
+        private Global global;
         private Dictionary<string, ReversePath> reversePathCache;
 
         new public static LogicalPathReader ProduceReader(int id, int org)
@@ -32,6 +33,7 @@ namespace LogicalPath
         public LogicalPathReader(int id, int org)
             : base(id, org)
         {
+            this.global = Global.getInstance();
             this.reversePathCache = new Dictionary<string, ReversePath>();
             Event.AddEvent(new Event(scheduler.currentTime, EventType.CHK_REV_PATH_CACHE, this, null));
         }

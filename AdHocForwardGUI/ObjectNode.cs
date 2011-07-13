@@ -17,6 +17,7 @@ namespace AdHocBaseApp
         protected List<Packet> cachePackets;
         public int OrgId;
         protected int sentPacketCount = 0;
+        private Global global;
 
         public static ObjectNode ProduceObjectNode(int id)
         {
@@ -31,6 +32,7 @@ namespace AdHocBaseApp
             this.lastNearReader = null;
             this.lastNearReaderTime = -1;
             this.cachePackets = new List<Packet>();
+            this.global = Global.getInstance();
         }
 
         public List<Reader> GetAllNearReaders(float distance)

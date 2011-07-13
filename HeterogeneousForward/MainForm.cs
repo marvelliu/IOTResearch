@@ -32,7 +32,7 @@ namespace HeterogeneousForward
             HFEventManager handler = new HFEventManager();
             handler.LoadEvents(false);
             //IOTReader.SetReaderTypes();
-            HFReader.AddDefaultForwardStrategy();
+            //HFReader.AddDefaultForwardStrategy();
 
             global.mainForm = (MainForm)this;
             inited = true;
@@ -116,7 +116,10 @@ namespace HeterogeneousForward
             {
                 HFReader reader = (HFReader)global.readers[i];
                 //brush = new SolidBrush(Organization.colors[reader.OrgId]);
-                brush = new SolidBrush(Color.Black);
+                if(reader.isSwHub == true)
+                    brush = new SolidBrush(Color.Red);
+                else
+                    brush = new SolidBrush(Color.Black);
 
                 gc.DrawString("R"+reader.Id.ToString(), new Font("arial", 10), brush,
                     (float)reader.X + offsetX, (float)reader.Y + offsetY);

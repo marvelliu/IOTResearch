@@ -32,6 +32,7 @@ namespace VANETs
 
     public class VANETReader : Reader
     {
+        private Global global;
 
         new public static VANETReader ProduceReader(int id, int org)
         {
@@ -41,6 +42,7 @@ namespace VANETs
         public VANETReader(int id, int org)
             : base(id, org)
         {
+            this.global = Global.getInstance();
             int[] key = new int[32];
             key[0] = (int)NodeType.READER;
             key[1] = id;

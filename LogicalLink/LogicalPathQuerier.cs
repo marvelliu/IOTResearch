@@ -8,6 +8,7 @@ namespace LogicalPath
 {
     class LogicalPathQuerier:Querier
     {
+        private Global global;
         new public static LogicalPathQuerier ProduceQuerier(int id)
         {
             return new LogicalPathQuerier(id);
@@ -15,7 +16,9 @@ namespace LogicalPath
 
         public LogicalPathQuerier(int id)
             : base(id)
-        { }
+        {
+            this.global = Global.getInstance();
+        }
 
         public override void Recv(Packet pkg)
         {

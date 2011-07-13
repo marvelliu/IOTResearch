@@ -86,13 +86,11 @@ namespace AdHocBaseApp
         public float maxLocationUpdateInterval = 5;
         public float minLocationUpdateInterval = 0.2f;
 
-        public int pingTTL = 3;
-
         public double delta = 0.001f;
 
         public string configFileName = "config.txt";
         public string eventsFileName = "events.txt";    
-        public int TTL = 3;
+        public int TTL = 5;
 
         public int SendEventNum = 10;
         public int SendEventMinTagNum = 1;
@@ -219,8 +217,6 @@ namespace AdHocBaseApp
             }
             else if (v[0] == "ttl")
                 TTL = int.Parse(v[1]);
-            else if (v[0] == "ping_ttl")
-                pingTTL = int.Parse(v[1]);
             else if (v[0] == "nodraw")
                 nodraw = bool.Parse(v[1]);
             else if (v[0] == "debug")

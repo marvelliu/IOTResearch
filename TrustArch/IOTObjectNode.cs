@@ -9,6 +9,8 @@ namespace TrustArch
 {
     public class IOTObjectNode:ObjectNode
     {
+        private IOTGlobal global;
+
         new public static IOTObjectNode ProduceObjectNode(int id)
         {
             return new IOTObjectNode(id);
@@ -18,6 +20,7 @@ namespace TrustArch
         protected IOTObjectNode(int id)
             : base(id)
         {
+            this.global = (IOTGlobal)Global.getInstance();
         }
         
 

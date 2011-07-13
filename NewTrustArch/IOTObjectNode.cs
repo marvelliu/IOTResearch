@@ -9,8 +9,8 @@ namespace NewTrustArch
 {
     public class IOTObjectNode:ObjectNode
     {
+        private IOTGlobal global;
         int dataSeq;
-
         Dictionary<int, float> nearReaderList;
 
         new public static IOTObjectNode ProduceObjectNode(int id)
@@ -22,6 +22,7 @@ namespace NewTrustArch
         protected IOTObjectNode(int id)
             : base(id)
         {
+            this.global = (IOTGlobal)Global.getInstance();
             this.dataSeq = 0;
             this.nearReaderList = new Dictionary<int, float>();
         }

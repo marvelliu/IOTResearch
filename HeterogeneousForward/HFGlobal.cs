@@ -16,10 +16,19 @@ namespace HeterogeneousForward
         public int maxStoredNearCandidateNum = 15;
         public int choosenNearCandidateNum = 5;
 
-        public float checkCandidateInterval = 5;
+        public float checkSWHubCandidateInterval = 6;
 
         public int maxSwHubHops = 4;
         public int minSWHubRequiredTags = 5;
+        public int minSwHubAvailTagThrethold = 9;
+        public int minSwHubNeighbors = 5;
+        public int maxSwHubs = 6;
+
+        public int innerSWTTL = 3;
+        public int outerSWTTL = 4;
+
+        public double swHubRatio = 0.1;
+        public int currentSWHubNumber = 0;
 
         public ForwardStrategyAction defaultForwardStrategyAction;
 
@@ -44,6 +53,12 @@ namespace HeterogeneousForward
             }
             else if (v[0] == "ignore_forward_statagy")
                 ignoreForwardStatagy = bool.Parse(v[1]);
+            else if (v[0] == "minSwHubAvailTagThrethold")
+                minSwHubAvailTagThrethold = int.Parse(v[1]);
+            else if (v[0] == "innerSWTTL")
+                innerSWTTL = int.Parse(v[1]);
+            else if (v[0] == "outterSWTTL")
+                outerSWTTL = int.Parse(v[1]);
             else
                 base.ParseArgs(v);
         }

@@ -36,7 +36,7 @@ namespace AdHocBaseApp
 
 
     [Serializable]
-    struct AODVReply
+    public struct AODVReply
     {
         public int dst;
         public int hops;
@@ -91,6 +91,7 @@ namespace AdHocBaseApp
         public Dictionary<int, GatewayEntity> gatewayEntities;
         public Dictionary<int, ObjectEntity> NearbyObjectCache;
         public HashSet<string> receivedPackets;
+        private Global global;
 
         protected bool retryOnSendingFailture = false;
 
@@ -104,6 +105,7 @@ namespace AdHocBaseApp
         public Reader(int id, int org)
             : base(id)
         {
+            this.global = Global.getInstance();
             this.OrgId = org;
             this.SendBeaconFlag = true;
             this.type = NodeType.READER;
@@ -205,12 +207,14 @@ namespace AdHocBaseApp
                 Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}({6}->{7}->{8})", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev, pkg.Src, pkg.Dst, ((AODVReply)pkg.Data).dst);
             else if (pkg.Type != PacketType.BEACON)
                 Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}({6}->{7}->{8})", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev, pkg.Src, pkg.Prev, pkg.Dst);
-            pkg.TTL--;
-            if (pkg.TTL < 0)
+
+            if (pkg.TTL == 0)
             {
-                Console.WriteLine("TTL drops to 0, abort.");
+                if(global.debug)
+                    Console.WriteLine("debug: TTL drops to 0, abort.");
                 return;
             }
+            pkg.TTL--;
             ProcessPacket(pkg);
         }
 
@@ -400,7 +404,7 @@ namespace AdHocBaseApp
         virtual public void RecvBeacon(Packet pkg)
         {
             Scheduler scheduler = Scheduler.getInstance();
-            Reader node = global.readers[pkg.Src];
+            Reader node = global.readers[pkg.Prev];
 
             if (pkg.Prev == Id && pkg.PrevType == type)
                 return;
@@ -513,6 +517,13 @@ namespace AdHocBaseApp
             Node node;
             int dst = pkg.Dst;
 
+            string pkgId = pkg.getId();
+            if (global.debug)
+                Console.WriteLine("pkgId:{0}", pkgId);
+            if (!this.receivedPackets.Contains(pkgId))
+                this.receivedPackets.Add(pkgId);
+            else
+                return true;
             if (pkg.PrevType == NodeType.READER)
             {
                 if (pkg.Prev != Id)//itself
@@ -537,12 +548,8 @@ namespace AdHocBaseApp
             // to itself
             if (pkg.Dst == Id && pkg.DstType == NodeType.READER)
             {
-                string pkgId = pkg.getId();
-                if (!this.receivedPackets.Contains(pkgId))
-                {
-                    this.receivedPackets.Add(pkgId);
-                    Console.WriteLine("{0:F4} [{1}] {2}{3}->{4}{5}, total: {6}", scheduler.currentTime, pkg.Type, pkg.SrcType, pkg.Src, this.type, this.Id, scheduler.currentTime - pkg.beginSentTime);
-                }
+                Console.WriteLine("{0:F4} [{1}] {2}{3}->{4}{5}, total: {6}", scheduler.currentTime, pkg.Type, pkg.SrcType, pkg.Src, this.type, this.Id, scheduler.currentTime - pkg.beginSentTime);
+
                 //Console.WriteLine("Done");
                 //SendPacketDirectly(scheduler.currentTime, pkg);
                 return true;
@@ -652,7 +659,7 @@ namespace AdHocBaseApp
             AddPendingAODVData(pkg);
         }
 
-        override public bool SendData(Packet pkg)
+        public override bool SendData(Packet pkg)
         {
             RoutePacket(pkg);
             return true;
@@ -870,7 +877,7 @@ namespace AdHocBaseApp
             {
                 this.retryOnSendingFailture = true;
                 Packet pkg1 = new Packet(this, node, PacketType.PING_RESPONSE);
-                pkg1.TTL = global.pingTTL;
+                pkg1.TTL = global.TTL;
                 pkg1.Data = 0;
                 SendAODVData(pkg1);
                 this.retryOnSendingFailture = false;
@@ -998,7 +1005,6 @@ namespace AdHocBaseApp
             RecvAODVReply(pkg);
         }
 
-
         public static Reader getNode(int n)
         {
             Global global = Global.getInstance();
@@ -1023,20 +1029,16 @@ namespace AdHocBaseApp
             switch (pkg.Type)
             {
                 case PacketType.BEACON:
-                    //Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}", scheduler.CurrentTime, pkg.Type, this.type, this.id, pkg.PrevType, pkg.Prev);
                     RecvBeacon(pkg);
                     break;
                 case PacketType.DATA:
                 case PacketType.LOCATION_UPDATE:
                     RoutePacket(pkg);
-                    if (pkg.Dst == this.Id && pkg.DstType == this.type)
-                        Console.WriteLine("{0:F4} [{1}] {2}{3}->{4}{5}, total: {6}", scheduler.currentTime, pkg.Type, pkg.SrcType, pkg.Src, this.type, this.Id, scheduler.currentTime - pkg.beginSentTime);
                     break;
                 case PacketType.AODV_REQUEST:
                     RecvAODVRequest(pkg);
                     break;
                 case PacketType.AODV_REPLY:
-                    //Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}-{6}", scheduler.CurrentTime, pkg.Type, this.type, this.id, pkg.PrevType, pkg.Prev, ((AODVReply)pkg.Data).dst);
                     RecvAODVReply(pkg);
                     break;
                 case PacketType.PING_REQUEST:

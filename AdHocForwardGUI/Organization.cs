@@ -82,6 +82,7 @@ namespace AdHocBaseApp
 
     public class Organization:Node
     {
+        private Global global;
         string name;
 
         public string Name
@@ -105,6 +106,7 @@ namespace AdHocBaseApp
 
         public Organization(int id, string name):base(id)
         {
+            this.global = Global.getInstance();
             this.Id = id;
             this.name = name;
             this.type = NodeType.ORG;

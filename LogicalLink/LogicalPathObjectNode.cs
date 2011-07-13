@@ -9,6 +9,7 @@ namespace LogicalPath
     class LogicalPathObjectNode:ObjectNode
     {
 
+        private Global global;
         new public static LogicalPathObjectNode ProduceObjectNode(int id)
         {
             return new LogicalPathObjectNode(id);
@@ -16,7 +17,9 @@ namespace LogicalPath
 
         protected LogicalPathObjectNode(int id)
             : base(id)
-        { }
+        {
+            this.global = Global.getInstance();
+        }
 
 
         public override void Recv(Packet pkg)

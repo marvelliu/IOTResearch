@@ -17,9 +17,11 @@ namespace AdHocBaseApp
         public Querier(int id)
             : base(id)
         {
+            this.global = Global.getInstance();
             this.type = NodeType.QUERIER;
         }
         protected float queryingTime = -1;
+        private Global global;
 
         public override void SendPacketDirectly(float time, Packet pkg)
         {

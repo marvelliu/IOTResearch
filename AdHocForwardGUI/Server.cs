@@ -33,11 +33,13 @@ namespace AdHocBaseApp
     public class Server : Node
     {
         Dictionary<int, ObjectLocation> objectLocations;
+        private Global global;
 
         protected static Server instance;
 
-        protected Server():base(0) 
+        protected Server():base(0)
         {
+            this.global = Global.getInstance();
             this.type = NodeType.SERVER;
             this.objectLocations = new Dictionary<int, ObjectLocation>();
         }

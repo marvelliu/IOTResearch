@@ -42,6 +42,7 @@ namespace TrustArch
         public IOTReader(int id, int org)
             : base(id, org)
         {
+            this.global = (IOTGlobal)Global.getInstance();
             this.ReaderCache = new Dictionary<int, RSUEntity>();
             this.wiredNodeCache = new List<int>();
             this.orgMonitorMapping = new Dictionary<int, List<int>>();
@@ -58,6 +59,7 @@ namespace TrustArch
         }
 
         public ReaderType readerType;
+        private IOTGlobal global;
 
 
         //TODO 定时清空Phenomemon
@@ -467,7 +469,7 @@ namespace TrustArch
             if (pkg.Next != Node.BroadcastNode.Id)
             {
                 p = new IOTPhenomemon(IOTPhenomemonType.SEND_PACKET, pkg.Prev, scheduler.currentTime, pkg);
-                p.likehood = ((IOTGlobal)global).sendLikehood;
+                p.likehood = global.sendLikehood;
                 this.observedPhenomemons.Add(p);
                 if(global.debug)
                     Console.WriteLine("[Debug] reader{0} add a RECV phenomemon of reader{1}", Id, pkg.Next);
@@ -479,7 +481,7 @@ namespace TrustArch
             if (pkg.Next != pkg.Dst)
             {
                 p = new IOTPhenomemon(IOTPhenomemonType.RECV_PACKET, pkg.Next, scheduler.currentTime, pkg);
-                p.likehood = ((IOTGlobal)global).recvLikehood;
+                p.likehood = global.recvLikehood;
                 this.observedPhenomemons.Add(p);
                 if(global.debug)
                     Console.WriteLine("[Debug] reader{0} add a SEND phenomemon of reader{1}", Id, pkg.Prev);
@@ -500,7 +502,7 @@ namespace TrustArch
             if (pkg.Next != Node.BroadcastNode.Id)
             {
                 p = new IOTPhenomemon(IOTPhenomemonType.SEND_PACKET, pkg.Prev, scheduler.currentTime, pkg);
-                p.likehood = ((IOTGlobal)global).sendLikehood;
+                p.likehood = global.sendLikehood;
                 this.observedPhenomemons.Add(p);
                 if(global.debug)
                     Console.WriteLine("[Debug] reader{0} add a RECV phenomemon of reader{1}", Id, pkg.Next);
@@ -512,7 +514,7 @@ namespace TrustArch
             if (pkg.Next != pkg.Dst)
             {
                 p = new IOTPhenomemon(IOTPhenomemonType.RECV_PACKET, pkg.Next, scheduler.currentTime, pkg);
-                p.likehood = ((IOTGlobal)global).recvLikehood;
+                p.likehood = global.recvLikehood;
                 this.observedPhenomemons.Add(p);
                 //Console.WriteLine("[Debug] reader{0} add a SEND phenomemon of reader{1}", id, pkg.Prev);
             }
@@ -554,7 +556,7 @@ namespace TrustArch
                     if (this.orgMonitorMapping.ContainsKey(org)
                         && this.orgMonitorMapping[org].Count > 0)
                     {     
-                        byte[] buf = new byte[((IOTGlobal)global).BufSize * results.Count];
+                        byte[] buf = new byte[global.BufSize * results.Count];
                         MemoryStream ms = new MemoryStream(buf);
                         BinaryFormatter formatter = new BinaryFormatter();
                         formatter.Serialize(ms, results);
@@ -581,7 +583,7 @@ namespace TrustArch
                 }
             }
 
-            float time = scheduler.currentTime + ((IOTGlobal)global).checkPhenomemonTimeout;
+            float time = scheduler.currentTime + global.checkPhenomemonTimeout;
             Event.AddEvent(new Event(time, EventType.CHK_RT_TIMEOUT, this, null));
             //Console.WriteLine("Reader{0} check routing done.", id);
         }
@@ -593,7 +595,7 @@ namespace TrustArch
 
             this.bandwidthPhenomemon.start = this.bandwidthPhenomemon.end;
             this.bandwidthPhenomemon.end = scheduler.currentTime;
-            this.bandwidthPhenomemon.likehood = Math.Min(this.totalReceivedPackets / ((IOTGlobal)global).totalPacketThreahold + ((IOTGlobal)global).SmallValue, 0.9);
+            this.bandwidthPhenomemon.likehood = Math.Min(this.totalReceivedPackets / global.totalPacketThreahold + global.SmallValue, 0.9);
             if (!this.observedPhenomemons.Contains(this.bandwidthPhenomemon))
                 this.observedPhenomemons.Add(this.bandwidthPhenomemon);
             this.totalReceivedPackets = 0;
@@ -617,17 +619,17 @@ namespace TrustArch
                 }
                 this.neighborSpeedPhenomemons[node].start = this.neighborSpeedPhenomemons[node].end;
                 this.neighborSpeedPhenomemons[node].end = scheduler.currentTime;
-                this.neighborSpeedPhenomemons[node].likehood = Math.Min(speed / ((IOTGlobal)global).nodeSpeedThreahold + ((IOTGlobal)global).SmallValue, 0.9);
+                this.neighborSpeedPhenomemons[node].likehood = Math.Min(speed / global.nodeSpeedThreahold + global.SmallValue, 0.9);
             }
             this.neighborSpeedPhenomemons[Id].start = this.neighborSpeedPhenomemons[Id].end;
             this.neighborSpeedPhenomemons[Id].end = scheduler.currentTime;
             double s = GetCurrentSpeed();
-            this.neighborSpeedPhenomemons[Id].likehood = Math.Min(s / ((IOTGlobal)global).nodeSpeedThreahold + ((IOTGlobal)global).SmallValue, 0.9);
+            this.neighborSpeedPhenomemons[Id].likehood = Math.Min(s / global.nodeSpeedThreahold + global.SmallValue, 0.9);
         }
 
         void CheckTimeoutPhenomemons()
         {
-            double sendTimeout = ((IOTGlobal)global).sendPacketTimeout;
+            double sendTimeout = global.sendPacketTimeout;
             List<IOTPhenomemon> temp1 = new List<IOTPhenomemon>();
             List<IOTPhenomemon> temp2 = new List<IOTPhenomemon>();
             foreach (IOTPhenomemon p in this.observedPhenomemons)
@@ -666,7 +668,7 @@ namespace TrustArch
                     else if (foundSend == null && foundNotSend == null)
                     {
                         IOTPhenomemon p2 = new IOTPhenomemon(IOTPhenomemonType.NOT_SEND_PACKET, p.nodeId, p.start, scheduler.currentTime, p.pkg);
-                        p2.likehood = ((IOTGlobal)global).checkTimeoutPhenomemonLikehood;
+                        p2.likehood = global.checkTimeoutPhenomemonLikehood;
                         temp1.Add(p2);
                     }
                 }
@@ -683,7 +685,7 @@ namespace TrustArch
 
         void ClearOutdatedPhenomemons()
         {
-            float timeThrehold = 2*((IOTGlobal)global).checkPhenomemonTimeout;
+            float timeThrehold = 2*global.checkPhenomemonTimeout;
 
             List<IOTPhenomemon> temp = new List<IOTPhenomemon>();
             foreach (IOTPhenomemon p in this.observedPhenomemons)
@@ -805,14 +807,14 @@ namespace TrustArch
             Console.WriteLine("{0:F4} Monitor reader{1} check events.", scheduler.currentTime, Id);
             if (this.cachedEventTrustResult != null && this.cachedEventTrustResult.Count > 0)
             {
-                Dictionary<int, List<IOTNodeTrustResult>> orgNodeTrustResults = IOTNodeTrust.DeduceAllNodeTrusts(Id, this.cachedEventTrustResult, ((IOTGlobal)global).checkEventTimeout);
+                Dictionary<int, List<IOTNodeTrustResult>> orgNodeTrustResults = IOTNodeTrust.DeduceAllNodeTrusts(Id, this.cachedEventTrustResult, global.checkEventTimeout);
 
                 foreach (KeyValuePair<int, List<IOTNodeTrustResult>> k in orgNodeTrustResults)
                 {
                     int org = k.Key;
                     List<IOTNodeTrustResult> nodeTrusts = k.Value;
 
-                    byte[] buf = new byte[((IOTGlobal)global).BufSize * nodeTrusts.Count];
+                    byte[] buf = new byte[global.BufSize * nodeTrusts.Count];
                     MemoryStream ms = new MemoryStream(buf);
                     BinaryFormatter formatter = new BinaryFormatter();
                     formatter.Serialize(ms, nodeTrusts);
@@ -828,7 +830,7 @@ namespace TrustArch
                 this.cachedEventTrustResult.Clear();
             }
 
-            float time = scheduler.currentTime + ((IOTGlobal)global).checkEventTimeout;
+            float time = scheduler.currentTime + global.checkEventTimeout;
             Event.AddEvent(new Event(time, EventType.CHK_EVENT_TIMEOUT, this, null));
         }
 

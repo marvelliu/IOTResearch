@@ -15,11 +15,13 @@ namespace LogicalPath
     }
     class LogicalPathServer: Server
     {
+        private Global global;
         Dictionary<int, ObjectLogicalPath> objectLogicalPaths;
 
         public LogicalPathServer()
             : base()
         {
+            this.global = Global.getInstance();
             this.objectLogicalPaths = new Dictionary<int, ObjectLogicalPath>();
         }
 

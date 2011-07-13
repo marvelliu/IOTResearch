@@ -10,7 +10,7 @@ namespace AdHocBaseApp
     {
         public NodeType type;
         public int Id;
-        protected Global global;
+        private Global global;
         protected Scheduler scheduler = Scheduler.getInstance();
         protected int packetSeq;
 
@@ -25,7 +25,7 @@ namespace AdHocBaseApp
             this.Id = id;
             this.type = type;
             this.packetSeq = 0;
-            this.global = Global.ProduceGlobal();
+            this.global = Global.getInstance();
         }
 
         public static Node BroadcastNode = new Node(-1, NodeType.READER);

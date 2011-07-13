@@ -164,7 +164,7 @@ namespace LocationPrivacy
         public Dictionary<string, double> cachedRecvResponse = new Dictionary<string, double>();
         public Dictionary<string, double> cachedCheckedRecvResponse = new Dictionary<string, double>();
         public Dictionary<int, HashSet<int>> cachedCandidateNodes = new Dictionary<int, HashSet<int>>();//native2 使用，节点缓存返回消息的节点
-
+        private PrivacyGlobal global;
 
         new public static PrivacyReader ProduceReader(int id, int org)
         {
@@ -174,6 +174,7 @@ namespace LocationPrivacy
         public PrivacyReader(int id, int org)
             : base(id, org)
         {
+            this.global = (PrivacyGlobal)Global.getInstance();
         }
 
 
@@ -260,7 +261,7 @@ namespace LocationPrivacy
 
 
             //native 方法
-            if (((PrivacyGlobal)global).nativeMethod == 1)
+            if (global.nativeMethod == 1)
             {
                 this.lastesth = 2;
                 Console.WriteLine("{0:F4} [JOIN_ANON_GROUP] {1}{2} start to join group k={3}, l={4}. [IN]", scheduler.currentTime, this.type, this.Id, k, this.lastesth);
@@ -286,7 +287,7 @@ namespace LocationPrivacy
 
             //如果建立了匿名树，则不是第一次，或者是native2的方法，那也先获取频繁子集
             HashSet<int> freqSet = new HashSet<int>();
-            if (groupRoot >= 0 || ((PrivacyGlobal)global).nativeMethod == 2)
+            if (groupRoot >= 0 || global.nativeMethod == 2)
             {
                 //比较现有匿名组中出现次数最多的节点
                 Dictionary<int, int> h = new Dictionary<int, int>();
@@ -323,7 +324,7 @@ namespace LocationPrivacy
             }
 
             //第二种方法， native2
-            if (((PrivacyGlobal)global).nativeMethod == 2)
+            if (global.nativeMethod == 2)
             {
                 Console.WriteLine("{0:F4} [JOIN_ANON_GROUP] {1}{2} start to join group k={3}, l={4}. [IN]", scheduler.currentTime, this.type, this.Id, k, this.lastesth);
 
@@ -346,7 +347,7 @@ namespace LocationPrivacy
                     string groupident = this.Id + "-" + k;
                     this.pendingNativeGroupResponses.Add(groupident, new Dictionary<int, NativeGroupResponseEntry>());
                     this.cachedRecvRequest.Add(groupident, scheduler.currentTime);
-                    Event.AddEvent(new Event(scheduler.currentTime + ((PrivacyGlobal)global).native2WaitingTimeout, EventType.CHK_NATGROUP1, this, groupident));
+                    Event.AddEvent(new Event(scheduler.currentTime + global.native2WaitingTimeout, EventType.CHK_NATGROUP1, this, groupident));
                 }
                 return;
             }
@@ -361,7 +362,7 @@ namespace LocationPrivacy
                 this.CachedRegionEntries.Add(key, new AnonyRegionEntry(rootId, hops));
                 this.CachedDistEntries.Add(this.Id, new DistanceEntry(this.Id, 0, scheduler.currentTime));
                 //init
-                double includedAngle = ((PrivacyGlobal)global).includedAngle;
+                double includedAngle = global.includedAngle;
                 SendTreeGroupRequest(rootId,m, L, 0, 0, 0);
                 this.CachedTreeEntries.Add(key, new AnonyTreeEntry(rootId, null, m));
                 this.CachedTreeEntries[key].status = SubNodeStatus.NORMAL;
@@ -487,7 +488,7 @@ namespace LocationPrivacy
                     SendSetGroup(this.Id, this.Id, k, nodeId, set, new HashSet<int>(){nodeId});
                 return;
             }
-            else if (scheduler.currentTime - this.cachedRecvRequest[groupident] >= ((PrivacyGlobal)global).native2WaitingTimeout)//使用native方法
+            else if (scheduler.currentTime - this.cachedRecvRequest[groupident] >= global.native2WaitingTimeout)//使用native方法
             {
                 this.lastesth = 2;
                 Console.WriteLine("{0:F4} [FALLBACK] {1}{2} start to use the native method", scheduler.currentTime, this.type, this.Id);
@@ -987,7 +988,7 @@ namespace LocationPrivacy
         {
             Packet pkg = new Packet(this, Node.getNode(dstNode, NodeType.READER), PacketType.NEW_GROUP_CANDIDATE_RESPONSE);
             pkg.Data = new AddNewGroupCandidateField(rootId, k, origId, result, L, l, preAngle, hops);
-            pkg.TTL = ((PrivacyGlobal)global).longTTL;
+            pkg.TTL = global.longTTL;
             SendData(pkg);
         }
 
@@ -1100,7 +1101,7 @@ namespace LocationPrivacy
         public void SendNewGroupRequest(int rootId, int k, int origId, int assigningCount, HashSet<int> candidates, Node to)
         {
             Packet pkg = new Packet(this, to, PacketType.NEW_GROUP_REQUEST);
-            pkg.TTL = ((PrivacyGlobal)global).longTTL;
+            pkg.TTL = global.longTTL;
             pkg.Data = new NewGroupRequestField(rootId, k, origId, assigningCount, candidates);
             this.retryOnSendingFailture = true;
             SendData(pkg);
@@ -1131,7 +1132,7 @@ namespace LocationPrivacy
         {
             this.retryOnSendingFailture = true;
             Packet pkg = new Packet(this, Node.getNode(dst, NodeType.READER), PacketType.NEW_GROUP_PING);
-            pkg.TTL = ((PrivacyGlobal)global).longTTL;
+            pkg.TTL = global.longTTL;
             pkg.Data = new NewGroupRequestField(rootId, k, origId, -1, null);
             SendData(pkg);
             this.retryOnSendingFailture = false;
@@ -1164,7 +1165,7 @@ namespace LocationPrivacy
             //Console.WriteLine("debug: list:{0}, ++reader{1}", Utility.DumpHashIntSet(result), this.id);
             this.retryOnSendingFailture = true;
             Packet pkg = new Packet(this, to, PacketType.NEW_GROUP_RESPONSE);
-            pkg.TTL = ((PrivacyGlobal)global).longTTL;
+            pkg.TTL = global.longTTL;
             pkg.NewGroupResponse = new NewGroupResponseField(rootId, k, origId, result);
             SendData(pkg);
             this.retryOnSendingFailture = false;
@@ -1342,8 +1343,8 @@ namespace LocationPrivacy
                     SendSubTreeInfo(rootId, list, SubNodeStatus.RETRIEVING, cn, snode);
                     SendTreeGroupRequest(rootId, newm, L, x, angle, hops);
 
-                    subTreeInfo.checkSubTreeTime = scheduler.currentTime + ((PrivacyGlobal)global).waitChildDelay;
-                    Event.AddEvent(new Event(scheduler.currentTime + ((PrivacyGlobal)global).waitChildDelay, EventType.CHK_SUBTREE, this, new List<int>() { rootId }));                    
+                    subTreeInfo.checkSubTreeTime = scheduler.currentTime + global.waitChildDelay;
+                    Event.AddEvent(new Event(scheduler.currentTime + global.waitChildDelay, EventType.CHK_SUBTREE, this, new List<int>() { rootId }));                    
                 }
                 else //否则直接返回
                 {
@@ -1426,7 +1427,7 @@ namespace LocationPrivacy
                 }
                 if (status == SubNodeStatus.OUTSIDE)
                     return;
-                SendPingRequest(c, ((PrivacyGlobal)global).longTTL);
+                SendPingRequest(c, global.longTTL);
             }
             //否则没有需要等待的节点，可发送subtree响应
             ////为在匿名区域内的边缘节点，树的叶节点            
@@ -1573,7 +1574,7 @@ namespace LocationPrivacy
                 //需要更新
                 if (update == true && update1 == true)
                 {
-                    //Event.AddEvent(new Event(scheduler.CurrentTime + ((PrivacyGlobal)global).waitChildDelay, EventType.CHK_SUBTREE, this, new List<int>() { rootId }));
+                    //Event.AddEvent(new Event(scheduler.CurrentTime + global.waitChildDelay, EventType.CHK_SUBTREE, this, new List<int>() { rootId }));
                     List<int> list = getSubTreeNode(rootId);
                     subTreeInfo.status = SubNodeStatus.NORMAL;
                     SendSubTreeInfo(rootId, list, SubNodeStatus.NORMAL, subTreeInfo.cn, subTreeInfo.parent);
@@ -1838,7 +1839,7 @@ namespace LocationPrivacy
             foreach (AnonyTreeEntry subTreeInfo in this.CachedTreeEntries.Values)
             {
                 foreach (int c in subTreeInfo.subtree.Keys)
-                    SendPingRequest(c, ((PrivacyGlobal)global).longTTL);
+                    SendPingRequest(c, global.longTTL);
             }
              */
 
@@ -2083,7 +2084,7 @@ namespace LocationPrivacy
             if (pkg.Dst == this.Id && pkg.DstType == this.type)
             {
                 Packet pkg1 = new Packet(this, node, PacketType.PING_RESPONSE);
-                pkg1.TTL = global.pingTTL; ;
+                pkg1.TTL = global.TTL; ;
                 SendAODVData(pkg1);
             }
             else

@@ -11,7 +11,7 @@ namespace HeterogeneousForward
     {
         public override void GenerateSendEvents(bool append, bool reload, Node[] froms, Node[] tos, string cmd)
         {
-            Global global = Global.getInstance();
+            HFGlobal global = (HFGlobal)Global.getInstance();
             string line = null;
             StreamWriter sw = null;
             sw = new StreamWriter(global.eventsFileName, append);
@@ -44,7 +44,7 @@ namespace HeterogeneousForward
                 HashSet<int> set = new HashSet<int>();
                 while(set.Count>=num)
                 {
-                    int m = Utility.Rand(((HFGlobal)global).tagNameNum);
+                    int m = Utility.Rand(global.tagNameNum);
                     if (!set.Contains(m))
                         set.Add(m);
                 } 

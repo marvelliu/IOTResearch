@@ -14,6 +14,7 @@ namespace NewTrustArch
 
     public class IOTTrustManager:Node
     {
+        private IOTGlobal global;
         Dictionary<int, IOTOrganizationTrust> orgReputations;
         List<IOTOrganizationTrust> sortedOrgReputations;
 
@@ -22,13 +23,13 @@ namespace NewTrustArch
         protected IOTTrustManager(int id)
             : base(id)
         {
+            this.global = (IOTGlobal)Global.getInstance();
             this.type = NodeType.TRUST_MANAGER;
             this.cachedNodeTrustTypeResult = new List<IOTNodeTrustTypeResult>();
             this.orgReputations = new Dictionary<int,IOTOrganizationTrust>();
             this.sortedOrgReputations = new List<IOTOrganizationTrust>();
 
-            IOTGlobal g = (IOTGlobal)global;
-            double initTrust = g.InitTrust;
+            double initTrust = global.InitTrust;
             foreach (Organization org in global.orgs)
             {
                 this.orgReputations.Add(org.Id, new IOTOrganizationTrust(org.Id, initTrust));
@@ -150,7 +151,7 @@ namespace NewTrustArch
                 this.cachedNodeTrustTypeResult.Clear();
             }
             OutputReputations();
-            float time = scheduler.currentTime + ((IOTGlobal)global).checkNodeTypeTimeout;
+            float time = scheduler.currentTime + global.checkNodeTypeTimeout;
             Event.AddEvent(new Event(time, EventType.CHK_RT_TIMEOUT, this, null));
         }
 

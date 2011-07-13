@@ -48,7 +48,7 @@ namespace NewTrustArch
     {
         Dictionary<int, List<int>> ownNodes;
         Dictionary<int, List<int>> trustNodes;
-        new IOTGlobal global;
+        IOTGlobal global;
 
         List<IOTNodeTrustResult> cachedNodeTrustResult;
         Dictionary<int, IOTNodeTrustTypeResult> cacheHistoricaldNodeTrustResult;
@@ -232,7 +232,7 @@ namespace NewTrustArch
             //将最终的数据发送给信任管理机构
             if (nodeTrustResults.Count > 0)
             {
-                byte[] buf = new byte[((IOTGlobal)global).BufSize * nodeTrustResults.Count];
+                byte[] buf = new byte[global.BufSize * nodeTrustResults.Count];
                 MemoryStream ms = new MemoryStream(buf);
                 BinaryFormatter formatter = new BinaryFormatter();
                 formatter.Serialize(ms, nodeTrustResults);
