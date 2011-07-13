@@ -94,7 +94,8 @@ namespace AdHocBaseApp
         }
 
 
-        public void GenerateRandomObjectMotionEvents(bool append, bool reload, double speed, int eventCount, int nodeCount, NodeType nodeType, string filename)
+        //这个函数调用完了需要reload事件
+        public void GenerateRandomObjectMotionEvents(bool append, double speed, int eventCount, int nodeCount, NodeType nodeType, string filename)
         {
             string type = "";
             if (nodeType == NodeType.READER)
@@ -114,8 +115,14 @@ namespace AdHocBaseApp
                 sw = new StreamWriter(filename, append);
                 sw.WriteLine();
 
-                for (int node = 0; node < nodeCount; node++)
+                HashSet<int> nodes = new HashSet<int>();
+                for (int t = 0; t < nodeCount; t++)
                 {
+                    int node = -1;
+                    do{
+                        node = (int)Utility.U_Rand(global.readerNum);
+                    }while(nodes.Contains(node));
+                    nodes.Add(node);
                     for (int i = 0; i < eventCount; i++)
                     {
                         //max speed 
@@ -140,8 +147,6 @@ namespace AdHocBaseApp
                 if (sw != null)
                     sw.Close();
             }
-            if (reload == true)
-                Event.LoadEvents();
         }
 
         public void ClearEvents(string filename, string cmd)
