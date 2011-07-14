@@ -232,14 +232,40 @@ namespace AdHocBaseApp
             }
             for (int i = 0; i < global.readerNum; i++)
             {
-                //do{
                 double x = Utility.U_Rand(global.layoutX);
                 double y = Utility.U_Rand(global.layoutY);
                 global.readers[i].X = x;
                 global.readers[i].Y = y;
-                //} while (global.readers[i].GetAllNearReaders(global.nodeDist, true).Count == 0 && i > global.readerNum / 5);
+            }
+            //验证所有节点的连通性,每个节点的连通度至少为2
+            for (int i = 0; i < global.readerNum; i++)
+            {
+                Reader r1 = global.readers[i];
+                do
+                {
+                    int n = 0;
+                    for (int j = 0; j < global.readerNum; j++)
+                    {
+                        Reader r2 = global.readers[j];
+                        if (r1.Id == r2.Id)
+                            continue;
+                        double dist = Utility.Distance(r1, r2);
+                        if (dist < global.nodeMaxDist)
+                            n++;
+                        if (dist < 20)//两个节点不能太近
+                        {
+                            n = 1;
+                            break;
+                        }
+                    }
+                    if (n >= 2)
+                        break;
+                    r1.X = Utility.U_Rand(global.layoutX);
+                    r1.Y = Utility.U_Rand(global.layoutY);
+                } while (true);
             }
         }
+        
 
 
         public static void GenerateObjectPositionsAllRandom()
@@ -293,7 +319,7 @@ namespace AdHocBaseApp
                 }
                 pkg.PrevType = type;
                 pkg.Prev = Id;
-                pkg.PacketSeq = this.sentPacketCount++;
+                pkg.SrcSenderSeq = this.sentPacketCount++;
                 Event.AddEvent(
                     new Event(time + recv_time, EventType.RECV,
                         node, pkg));

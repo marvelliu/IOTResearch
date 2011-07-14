@@ -176,47 +176,6 @@ namespace AdHocBaseApp
             }
         }
 
-        public override void Recv(Packet pkg)
-        {
-            //只有reader才需要检查，但是里面函数处理了
-            CheckPacketCount(pkg);
-
-            if (pkg.PrevType == NodeType.OBJECT || pkg.PrevType == NodeType.READER)
-            {
-                //不检查了，只在发送的时候检查
-                /*
-                Node node = Node.getNode(pkg.Prev, pkg.PrevType);
-                double dist = pkg.PrevType == NodeType.OBJECT ? global.objectMaxDist : global.nodeMaxDist;
-                if (Utility.Distance(this, (MobileNode)node) > dist)
-                {
-                    //if (pkg.Next == id)
-                    //    Console.WriteLine("{0:F4} [{1}] {2}{3} Drop data of {4}{5} due to out of space.", scheduler.CurrentTime, pkg.Type, this.type, this.id, node.type, node.Id);
-
-                    return;
-                }*/
-            }
-
-            if ((pkg.Next != Id && pkg.Next != Node.BroadcastNode.Id) || pkg.NextType != NodeType.READER)
-            {
-                return;
-            }
-
-            if (pkg.Type == PacketType.AODV_REQUEST)
-                Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}({6}->{7}->{8})", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev, pkg.Src, pkg.Dst, pkg.AODVRequest.dst);
-            else if (pkg.Type == PacketType.AODV_REPLY)
-                Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}({6}->{7}->{8})", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev, pkg.Src, pkg.Dst, ((AODVReply)pkg.Data).dst);
-            else if (pkg.Type != PacketType.BEACON)
-                Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}({6}->{7}->{8})", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev, pkg.Src, pkg.Prev, pkg.Dst);
-
-            if (pkg.TTL == 0)
-            {
-                if(global.debug)
-                    Console.WriteLine("debug: TTL drops to 0, abort.");
-                return;
-            }
-            pkg.TTL--;
-            ProcessPacket(pkg);
-        }
 
 
         public void SendPacket(float time, Packet pkg)
@@ -225,13 +184,23 @@ namespace AdHocBaseApp
                         new Event(time, EventType.RECV, this, pkg));
         }
 
+        public void initPacketSeq(Packet pkg)
+        {
+            if (pkg.seqInited == false)
+            {
+                this.packetSeq++;
+                pkg.PrevSenderSeq = this.packetSeq;
+                if (this.Id == pkg.Src)
+                    pkg.SrcSenderSeq = this.packetSeq;
+                pkg.seqInited = true;
+            }
+        }
+
         public override void SendPacketDirectly(float time, Packet pkg)
         {
             float recv_time = 0;
             pkg.Prev = Id;
             global.PacketSeq++;
-
-
 
             if (pkg.Type == PacketType.AODV_REQUEST)
                 Console.WriteLine("{0:F4} [{1}] {2}{3} sends to {4}{5}({6}->{7}->{8})", time, pkg.Type, this.type, this.Id, pkg.NextType, (pkg.Next == -1 ? "all" : pkg.Next.ToString()), pkg.Src, pkg.Dst, pkg.AODVRequest.dst);
@@ -246,26 +215,28 @@ namespace AdHocBaseApp
                 if (list.Count == 0)
                     return;
                 this.packetCounter++;
-                this.packetSeq++;
+                if (pkg.seqInited == false) //如果packetSeq小于0，则说明未定该数据包的id
+                    this.packetSeq++;
 
                 for (int i = 0; i < list.Count; i++)
                 {
                     Packet pkg1 = pkg.Clone() as Packet;
-                    pkg1.SenderSeq = this.packetSeq;
                     pkg1.DelPacketNode = list[0].Id;
-                    if (pkg.Src == Id)
-                        pkg1.PacketSeq = this.packetSeq;
+                    if (pkg1.seqInited == false)
+                    {
+                        pkg1.PrevSenderSeq = this.packetSeq;
+                        if (pkg.Src == Id)
+                            pkg1.SrcSenderSeq = pkg1.PrevSenderSeq;
+                    }
 
                     //Console.WriteLine("+packet count: {0}->{1} {2}_{3}", pkg.Prev, pkg.Next, global.readers[pkg.Prev].packetCounter,pkg.PacketSeq);
                     recv_time = global.processDelay + (float)(Utility.Distance(this, list[i]) / global.lightSpeed);
                     Event.AddEvent(
                         new Event(time + recv_time, EventType.RECV, list[i], pkg1));
                 }
-                this.packetSeq++;
             }
             else
             {
-
                 pkg.PrevType = type;
                 pkg.Prev = Id;
 
@@ -297,7 +268,8 @@ namespace AdHocBaseApp
 
                         double prop = (totalPackets > 90) ? (0.1) : totalPackets / (-100.0) + 1.0;
 
-                        this.packetSeq++;
+                        if (pkg.seqInited == false) //如果packetSeq小于0，则说明未定该数据包的id
+                            this.packetSeq++;
                         for (int i = 0; i < list.Count; i++)
                         {
                             while (true)
@@ -308,9 +280,12 @@ namespace AdHocBaseApp
                                     break;
                             }
                             Packet pkg1 = pkg.Clone() as Packet;
-                            pkg1.SenderSeq = this.packetSeq;
-                            if (pkg.Src == Id)
-                                pkg1.PacketSeq = this.packetSeq;
+                            if (pkg1.seqInited == false)
+                            {
+                                pkg1.PrevSenderSeq = this.packetSeq;
+                                if (pkg.Src == Id)
+                                    pkg1.SrcSenderSeq = pkg1.PrevSenderSeq;
+                            }
                             //Console.WriteLine("[DEBUG] recv reader{0}-{1}", list[i].id, pkg1.PacketSeq);
 
                             recv_time += (float)(Utility.Distance(this, (MobileNode)list[i]) / global.lightSpeed);
@@ -396,9 +371,17 @@ namespace AdHocBaseApp
             float nextBeacon = 0;
             if (scheduler.currentTime < global.beaconWarming)
                 nextBeacon = (float)(Utility.P_Rand(10 * (global.beaconWarmingInterval + 0.4)) / 10);//0.5是为了设定最小值
+            else if (this.Speed[0] > 1f) //当节点运动时，beacon应频繁些
+                nextBeacon = (float)(Utility.P_Rand(4 * global.beaconInterval) / 4);
             else
                 nextBeacon = (float)(Utility.P_Rand(10 * global.beaconInterval) / 10);
             Event.AddEvent(new Event(scheduler.currentTime + nextBeacon, EventType.SND_BCN, this, null));
+        }
+
+        public bool IsFreshRecord(int hops, double time)
+        {
+            return ((hops >1 && scheduler.currentTime - time < Math.Min(4, global.beaconInterval))
+                || (hops == 1 && scheduler.currentTime - time < global.beaconInterval / 2));
         }
 
         virtual public void RecvBeacon(Packet pkg)
@@ -549,9 +532,6 @@ namespace AdHocBaseApp
             if (pkg.Dst == Id && pkg.DstType == NodeType.READER)
             {
                 Console.WriteLine("{0:F4} [{1}] {2}{3}->{4}{5}, total: {6}", scheduler.currentTime, pkg.Type, pkg.SrcType, pkg.Src, this.type, this.Id, scheduler.currentTime - pkg.beginSentTime);
-
-                //Console.WriteLine("Done");
-                //SendPacketDirectly(scheduler.currentTime, pkg);
                 return true;
             }
 
@@ -626,12 +606,16 @@ namespace AdHocBaseApp
                 && scheduler.currentTime - this.Neighbors[dst].lastBeacon < global.beaconInterval;
         }
 
-        public bool ExistInRouteTable(int dst)
+        public virtual RouteEntity GetRouteEntityFromRouteTable(int dst)
         {
-            return (routeTable.ContainsKey(dst) && (
-                scheduler.currentTime - routeTable[dst].localLastUpdatedTime < Math.Min(0.5, global.beaconInterval)
-                || (routeTable[dst].hops >1 && scheduler.currentTime - routeTable[dst].remoteLastUpdatedTime < Math.Min(4, global.beaconInterval))
-                || (routeTable[dst].hops == 1 && scheduler.currentTime - routeTable[dst].remoteLastUpdatedTime < global.beaconInterval / 2)));
+            if (routeTable.ContainsKey(dst)
+                    && (
+                        scheduler.currentTime - routeTable[dst].localLastUpdatedTime < Math.Min(0.5, global.beaconInterval)
+                        || IsFreshRecord(routeTable[dst].hops, routeTable[dst].remoteLastUpdatedTime)
+                        )
+                    )
+                return routeTable[dst];
+            return null;
         }
 
         public virtual void SendAODVData(Packet pkg, int dst)
@@ -639,9 +623,9 @@ namespace AdHocBaseApp
             Reader node = global.readers[pkg.Prev];
             //Check Route Table
 
-            if (ExistInRouteTable(dst))
+            RouteEntity entity = GetRouteEntityFromRouteTable(dst);
+            if (entity != null)
             {
-                RouteEntity entity = (RouteEntity)routeTable[dst];
                 //Console.WriteLine("{0}-{1}", entity.hops, entity.time);
                 pkg.Prev = Id;
                 pkg.Next = entity.next;
@@ -675,7 +659,7 @@ namespace AdHocBaseApp
             SendAODVData(pkg, pkg.Dst);
         }
 
-        public void AddPendingAODVData(Packet pkg)
+        public virtual void AddPendingAODVData(Packet pkg)
         {
             int dst = pkg.Dst;
             if (!this.pendingAODVData.ContainsKey(dst))
@@ -692,15 +676,6 @@ namespace AdHocBaseApp
                 this.pendingAODVData[dst].Add(new PacketCacheEntry(pkg, scheduler.currentTime));
         }
 
-        public void SendAODVRequest(Node node, int src, int dst, int hops, uint tags)
-        {
-            Packet pkg = new Packet(this, node, PacketType.AODV_REQUEST);
-            pkg.AODVRequest = new AODVRequestField(src, dst, hops);
-            pkg.TTL = 1;
-            pkg.Data = dst;
-            pkg.Tags = tags;
-            SendPacketDirectly(scheduler.currentTime, pkg);
-        }
 
         public void SendAODVRequest(Node node, int src, int dst, int hops)
         {
@@ -742,9 +717,9 @@ namespace AdHocBaseApp
             }
 
             //在快速运动的环境下需要加入超时机制
-            if (ExistInRouteTable(dst))
+            RouteEntity entity = GetRouteEntityFromRouteTable(dst);
+            if (entity != null)
             {
-                RouteEntity entity = (RouteEntity)routeTable[dst];
                 if (entity.next != node.Id)//避免陷入死循环
                 {
                     SendAODVReply(dst, node, entity.hops, routeTable[dst].remoteLastUpdatedTime);
@@ -769,7 +744,7 @@ namespace AdHocBaseApp
             }
         }
 
-        void AddPendingAODVRequest(int src, int prev, int dst, bool updateFirstTime)
+        protected void AddPendingAODVRequest(int src, int prev, int dst, bool updateFirstTime)
         {
             if (!this.pendingAODVRequests.ContainsKey(dst))
             {
@@ -785,7 +760,7 @@ namespace AdHocBaseApp
                 this.pendingAODVRequests[dst][src].prevs.Add(prev);
         }
 
-        public void SendAODVReply(int dst, Reader node, int hops, double lastTime)
+        public virtual void SendAODVReply(int dst, Reader node, int hops, double lastTime)
         {
             Packet pkg = new Packet(this, node, PacketType.AODV_REPLY);
             pkg.TTL = 1;
@@ -793,7 +768,7 @@ namespace AdHocBaseApp
             SendPacketDirectly(scheduler.currentTime, pkg);
         }
 
-        public void RecvAODVReply(Packet pkg)
+        public virtual void RecvAODVReply(Packet pkg)
         {
             //Console.WriteLine("ttl:{0} hops: {1}", pkg.TTL, ((AODVReply)pkg.Data).hops);
             Reader node = global.readers[pkg.Prev];
@@ -1029,6 +1004,50 @@ namespace AdHocBaseApp
             return node;
         }
 
+
+        public override void Recv(Packet pkg)
+        {
+            pkg.seqInited = false;
+            //只有reader才需要检查，但是里面函数处理了
+            CheckPacketCount(pkg);
+
+            if (pkg.PrevType == NodeType.OBJECT || pkg.PrevType == NodeType.READER)
+            {
+                //不检查了，只在发送的时候检查
+                /*
+                Node node = Node.getNode(pkg.Prev, pkg.PrevType);
+                double dist = pkg.PrevType == NodeType.OBJECT ? global.objectMaxDist : global.nodeMaxDist;
+                if (Utility.Distance(this, (MobileNode)node) > dist)
+                {
+                    //if (pkg.Next == id)
+                    //    Console.WriteLine("{0:F4} [{1}] {2}{3} Drop data of {4}{5} due to out of space.", scheduler.CurrentTime, pkg.Type, this.type, this.id, node.type, node.Id);
+
+                    return;
+                }*/
+            }
+
+            if ((pkg.Next != Id && pkg.Next != Node.BroadcastNode.Id) || pkg.NextType != NodeType.READER)
+            {
+                return;
+            }
+
+            if (pkg.Type == PacketType.AODV_REQUEST)
+                Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}({6}->{7}->{8})", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev, pkg.Src, pkg.Dst, pkg.AODVRequest.dst);
+            else if (pkg.Type == PacketType.AODV_REPLY)
+                Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}({6}->{7}->{8})", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev, pkg.Src, pkg.Dst, ((AODVReply)pkg.Data).dst);
+            else if (pkg.Type != PacketType.BEACON)
+                Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}({6}->{7}->{8})", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev, pkg.Src, pkg.Prev, pkg.Dst);
+
+            if (pkg.TTL == 0)
+            {
+                if (global.debug)
+                    Console.WriteLine("debug: TTL drops to 0, abort.");
+                return;
+            }
+            pkg.TTL--;
+            ProcessPacket(pkg);
+        }
+
         public override void ProcessPacket(Packet pkg)
         {
             switch (pkg.Type)
@@ -1038,6 +1057,11 @@ namespace AdHocBaseApp
                     break;
                 case PacketType.DATA:
                 case PacketType.LOCATION_UPDATE:
+                    if (pkg.Src == this.Id)
+                    {
+                        Console.WriteLine("reader{0} recv a data packet to itself", this.Id);
+                        return;
+                    }
                     RoutePacket(pkg);
                     break;
                 case PacketType.AODV_REQUEST:

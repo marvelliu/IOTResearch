@@ -301,7 +301,7 @@ namespace TrustArch
             if (p1.pkg == null || p1.pkg.Type != PacketType.COMMAND)
                 return false;
             //使用PacketSeq判断两个数据包是否为同一个
-            return (p1.pkg.Command.tag == p2.pkg.Dst && p1.pkg.PacketSeq == p2.pkg.PacketSeq);
+            return (p1.pkg.Command.tag == p2.pkg.Dst && p1.pkg.SrcSenderSeq == p2.pkg.SrcSenderSeq);
         }
 
         public static bool ComparePhenomemonBySimiliarTag(IOTPhenomemon p1, IOTPhenomemon p2)
@@ -317,7 +317,7 @@ namespace TrustArch
             double likehood = 0;
             foreach (IOTPhenomemon p1 in list)
             {
-                likehood = Math.Max(likehood, 1 - global.SmallValue - Math.Abs(p1.pkg.PacketSeq - p.pkg.PacketSeq) / 100);
+                likehood = Math.Max(likehood, 1 - global.SmallValue - Math.Abs(p1.pkg.SrcSenderSeq - p.pkg.SrcSenderSeq) / 100);
             }
             return likehood;
         }
@@ -387,7 +387,7 @@ namespace TrustArch
 
                 if (global.debug)
                 {
-                    Console.WriteLine("{0}->{1}:{2}", selfId, node, p.pkg.PacketSeq);
+                    Console.WriteLine("{0}->{1}:{2}", selfId, node, p.pkg.SrcSenderSeq);
                     Console.WriteLine("a1:" + a1);
                     Console.WriteLine("a2:" + a2);
                     Console.WriteLine("a3:" + a3);
@@ -415,7 +415,7 @@ namespace TrustArch
                 if (ds.b[pow(IOTEventType.NotDropPacket) + pow(IOTEventType.NotDropPacketButNotReceivePacket)] < global.NormalBelief
                     && ds.p[pow(IOTEventType.NotDropPacket) + pow(IOTEventType.NotDropPacketButNotReceivePacket)] < global.NormalPlausibility)//确实是攻击,恶意事件的信念大于正常事件，或恶意事件的信念大于某一个阈值
                 {
-                    string pkgIdent = p.pkg.Prev + "->" + p.pkg.Next + "[" + p.pkg.SenderSeq + "]";
+                    string pkgIdent = p.pkg.Prev + "->" + p.pkg.Next + "[" + p.pkg.PrevSenderSeq + "]";
                     IOTEventTrustResult r = new IOTEventTrustResult(node, selfId, pkgIdent, IOTEventCategoryType.DropPacket, ds);
                     r.totalEventCount = eventCount[node];
                     r.app = p.pkg.AppId;
@@ -483,7 +483,7 @@ namespace TrustArch
                 if (ds.b[pow(IOTModifyPacketEventType.NotModifyPacket)] < global.NormalBelief
                     && ds.p[pow(IOTModifyPacketEventType.NotModifyPacket)] < global.NormalPlausibility)//确实是攻击,恶意事件的信念大于正常事件，或恶意事件的信念大于某一个阈值
                 {
-                    string pkgIdent = p.pkg.Prev + "->" + p.pkg.Next + "[" + p.pkg.SenderSeq + "]";
+                    string pkgIdent = p.pkg.Prev + "->" + p.pkg.Next + "[" + p.pkg.PrevSenderSeq + "]";
                     IOTEventTrustResult r = new IOTEventTrustResult(node, selfId, pkgIdent, IOTEventCategoryType.ModifyPacket, ds);
                     r.totalEventCount = eventCount[node];
                     r.app = p.pkg.AppId;
@@ -544,7 +544,7 @@ namespace TrustArch
                 if (ds.b[pow(IOTMakePacketEventType.NotMakePacket)] < global.NormalBelief
                     && ds.p[pow(IOTMakePacketEventType.NotMakePacket)] < global.NormalPlausibility)//确实是攻击,恶意事件的信念大于正常事件，或恶意事件的信念大于某一个阈值
                 {
-                    string pkgIdent = p.pkg.Prev + "->" + p.pkg.Next + "[" + p.pkg.SenderSeq + "]";
+                    string pkgIdent = p.pkg.Prev + "->" + p.pkg.Next + "[" + p.pkg.PrevSenderSeq + "]";
                     IOTEventTrustResult r = new IOTEventTrustResult(node, selfId, pkgIdent, IOTEventCategoryType.MakePacket, ds);
                     r.totalEventCount = eventCount[node];
                     r.app = p.pkg.AppId;
@@ -612,7 +612,7 @@ namespace TrustArch
                 if (ds.b[pow(IOTDropCommandEventType.NotDropCommand)] < global.NormalBelief
                     && ds.p[pow(IOTDropCommandEventType.NotDropCommand)] < global.NormalPlausibility)//确实是攻击,恶意事件的信念大于正常事件，或恶意事件的信念大于某一个阈值
                 {
-                    string pkgIdent = p.pkg.Prev + "->" + p.pkg.Next + "[" + p.pkg.SenderSeq + "]";
+                    string pkgIdent = p.pkg.Prev + "->" + p.pkg.Next + "[" + p.pkg.PrevSenderSeq + "]";
                     IOTEventTrustResult r = new IOTEventTrustResult(node, selfId, pkgIdent, IOTEventCategoryType.DropCommand, ds);
                     r.totalEventCount = eventCount[node];
                     r.app = p.pkg.AppId;
@@ -676,7 +676,7 @@ namespace TrustArch
                 if (ds.b[pow(IOTModifyCommandEventType.NotModifyCommand)] < global.NormalBelief
                     && ds.p[pow(IOTModifyCommandEventType.NotModifyCommand)] < global.NormalPlausibility)//确实是攻击,恶意事件的信念大于正常事件，或恶意事件的信念大于某一个阈值
                 {
-                    string pkgIdent = p.pkg.Prev + "->" + p.pkg.Next + "[" + p.pkg.SenderSeq + "]";
+                    string pkgIdent = p.pkg.Prev + "->" + p.pkg.Next + "[" + p.pkg.PrevSenderSeq + "]";
                     IOTEventTrustResult r = new IOTEventTrustResult(node, selfId, pkgIdent, IOTEventCategoryType.ModifyCommand, ds);
                     r.totalEventCount = eventCount[node];
                     r.app = p.pkg.AppId;
@@ -749,7 +749,7 @@ namespace TrustArch
                 if (ds.b[pow(IOTMakeCommandEventType.NotMakeCommand)] < global.NormalBelief
                     && ds.p[pow(IOTMakeCommandEventType.NotMakeCommand)] < global.NormalPlausibility)//确实是攻击,恶意事件的信念大于正常事件，或恶意事件的信念大于某一个阈值
                 {
-                    string pkgIdent = p.pkg.Prev + "->" + p.pkg.Next + "[" + p.pkg.SenderSeq + "]";
+                    string pkgIdent = p.pkg.Prev + "->" + p.pkg.Next + "[" + p.pkg.PrevSenderSeq + "]";
                     IOTEventTrustResult r = new IOTEventTrustResult(node, selfId, pkgIdent, IOTEventCategoryType.MakeCommand, ds);
                     r.totalEventCount = eventCount[node];
                     r.app = p.pkg.AppId;

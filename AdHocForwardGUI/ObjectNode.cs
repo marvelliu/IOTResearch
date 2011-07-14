@@ -67,8 +67,8 @@ namespace AdHocBaseApp
                 return;//No such a case.
             else
             {
-                pkg.PacketSeq = this.sentPacketCount;
-                pkg.SenderSeq = this.packetSeq;
+                pkg.SrcSenderSeq = this.sentPacketCount;
+                pkg.PrevSenderSeq = this.packetSeq;
 
                 MobileNode node = null;
                 switch (pkg.NextType)
@@ -81,10 +81,10 @@ namespace AdHocBaseApp
                         for (int i = 0; i < list.Count; i++)
                         {
                             Packet pkg1 = pkg.Clone() as Packet;
-                            pkg1.SenderSeq = this.packetSeq;
+                            pkg1.PrevSenderSeq = this.packetSeq;
                             pkg1.DelPacketNode = list[0].Id;
                             if (pkg.Src == Id)
-                                pkg1.PacketSeq = this.packetSeq;
+                                pkg1.SrcSenderSeq = this.packetSeq;
 
                             node = list[i];
                             recv_time = global.processDelay + (float)(Utility.Distance(this, node) / global.lightSpeed);

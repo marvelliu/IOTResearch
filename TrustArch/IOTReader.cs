@@ -135,7 +135,7 @@ namespace TrustArch
             {
                 if (pkg.Type == PacketType.DATA || pkg.Type == PacketType.COMMAND)
                 {
-                    Console.WriteLine("{0:F4} [{1}] {2}{3} Drop data of {4}{5} due to bad node. packet ident:{6}---{7}", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev, pkg.SenderSeq, pkg.PacketSeq);
+                    Console.WriteLine("{0:F4} [{1}] {2}{3} Drop data of {4}{5} due to bad node. packet ident:{6}---{7}", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev, pkg.PrevSenderSeq, pkg.SrcSenderSeq);
                     CheckPacketCount(pkg);
                     return;
                 }

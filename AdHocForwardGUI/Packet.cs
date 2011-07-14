@@ -639,6 +639,10 @@ namespace AdHocBaseApp
         public int TTL;
         public uint Tags;
 
+        public int SrcSenderSeq; //数据包本身的编号，用于区分其他数据包的标识，取决于pkg.Src的发送数据包数
+        public int PrevSenderSeq; //pkg.Prev节点发送的数据包数
+        public bool seqInited = false;
+
 
         public BeaconField Beacon;
         public AODVRequestField AODVRequest;
@@ -674,8 +678,6 @@ namespace AdHocBaseApp
 
         //////////////////Trust Approach/////////////////
         public ObjectTagHeaderField ObjectTagHeader;
-        public int PacketSeq;
-        public int SenderSeq;
         public TrustReportField TrustReport;
         public AuthorizationField Authorization;
         public GetMonitorRequestField GetMonitorRequest;
@@ -699,6 +701,8 @@ namespace AdHocBaseApp
         public Packet()
         {
             this.Type = PacketType.UNKNOWN;
+            this.SrcSenderSeq = -1; //SrcSenderSeq和PrevSenderSeq初始值为负，表明该数据包的id未定
+            this.PrevSenderSeq = -1;
         }
 
         public Packet(Node src, Node dst, PacketType type)
@@ -711,6 +715,8 @@ namespace AdHocBaseApp
             this.TTL = Global.getInstance().TTL;
             this.DelPacketNode = this.Dst;
             this.beginSentTime = Scheduler.getInstance().currentTime;
+            this.SrcSenderSeq = -1; //SrcSenderSeq和PrevSenderSeq初始值为负，表明该数据包的id未定
+            this.PrevSenderSeq = -1;
         }
 
         public Packet(Node src, Node dst, PacketType type, float time)
@@ -724,7 +730,7 @@ namespace AdHocBaseApp
             if (a.Type == b.Type
                 && a.Src == b.Src && a.SrcType == b.SrcType
                 && a.Dst == b.Dst && a.DstType == b.DstType
-                && a.PacketSeq == b.PacketSeq)
+                && a.SrcSenderSeq == b.SrcSenderSeq)
                 return true;
             else
                 return false;
@@ -732,7 +738,7 @@ namespace AdHocBaseApp
 
         public string getId()
         {
-            return this.SrcType.ToString() + this.Src + "-" + this.DstType.ToString() + this.Dst + ":" + this.PacketSeq;
+            return this.SrcType.ToString() + this.Src + "-" + this.DstType.ToString() + this.Dst + ":" + this.SrcSenderSeq;
         }
                 
         public static bool PacketHeadEqual(Packet a, Packet b)
@@ -747,7 +753,7 @@ namespace AdHocBaseApp
                      
         public static bool PacketDataEqual(Packet a, Packet b)
         {
-            return a.PacketSeq == b.PacketSeq;
+            return a.SrcSenderSeq == b.SrcSenderSeq;
         }
 
         public object Clone()
@@ -767,7 +773,7 @@ namespace AdHocBaseApp
             else if (a != null && b == null)
                 return false;
             else
-                return (a.PacketSeq == b.PacketSeq && a.Src == b.Src && a.Dst == b.Dst);
+                return (a.SrcSenderSeq == b.SrcSenderSeq && a.Src == b.Src && a.Dst == b.Dst);
         }
     }
 }

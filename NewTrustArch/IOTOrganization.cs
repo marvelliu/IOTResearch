@@ -281,7 +281,7 @@ namespace NewTrustArch
                 }
                 pkg.PrevType = type;
                 pkg.Prev = Id;
-                pkg.PacketSeq = this.sentPacketCount++;
+                pkg.SrcSenderSeq = this.sentPacketCount++;
                 Event.AddEvent(
                     new Event(time + recv_time, EventType.RECV,
                         node, pkg));
