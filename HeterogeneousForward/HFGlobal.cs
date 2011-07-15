@@ -32,6 +32,8 @@ namespace HeterogeneousForward
         public double swHubRatio = 0.1;
         public int currentSWHubNumber = 0;
 
+        public bool aggressivelyLookForSwHub = false;
+
         public ForwardStrategyAction defaultForwardStrategyAction;
 
         new public static HFGlobal ProduceGlobal()
@@ -61,6 +63,8 @@ namespace HeterogeneousForward
                 innerSWTTL = int.Parse(v[1]);
             else if (v[0] == "outterSWTTL")
                 outerSWTTL = int.Parse(v[1]);
+            else if (v[0] == "aggressivelyLookForSwHub")
+                aggressivelyLookForSwHub = bool.Parse(v[1]);
             else
                 base.ParseArgs(v);
         }

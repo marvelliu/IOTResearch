@@ -64,13 +64,15 @@ namespace HeterogeneousForward
     {
         public int hops;
         public uint tags;
-        public double time;
+        public double localUpdateTime;
+        public double remoteUpdateTime;
 
-        public PingedSWHub(int hops, uint tags, double time)
+        public PingedSWHub(int hops, uint tags, double localUpdateTime, double remoteUpdateTime)
         {
             this.hops = hops;
             this.tags = tags;
-            this.time = time;
+            this.localUpdateTime = localUpdateTime;
+            this.remoteUpdateTime = remoteUpdateTime;
         }
     }
 
@@ -109,12 +111,13 @@ namespace HeterogeneousForward
 
         public RouteEntity GetRouteEntityFromRouteTable(int dst, uint tags)
         {
+            string k = dst + "-" + tags;
             string key = "";
-            if (routeTable.ContainsKey(key))
-                key = dst + "-" + tags;
+            if (routeTable.ContainsKey(k))
+                key = k;
             else if (routeTable.ContainsKey(dst.ToString()))
                 key = dst.ToString();
-            if (routeTable.ContainsKey(dst.ToString()) && (
+            if (routeTable.ContainsKey(key) && (
                         scheduler.currentTime - routeTable[key].localLastUpdatedTime < Math.Min(0.5, global.beaconInterval)
                         || IsFreshRecord(routeTable[key].hops, routeTable[key].remoteLastUpdatedTime)
                         ))
@@ -295,6 +298,18 @@ namespace HeterogeneousForward
         }
 
 
+
+        SWHubCandidate GetSWHubCandidate(int id)
+        {
+            foreach (SWHubCandidate c in this.swHubCandidates)
+            {
+                if (c.nodeId == id)
+                    return c;
+            }
+            return null;
+        }
+
+        //RoutePacket只是路由普通的数据包，并非专门发往swhub的
         public override bool RoutePacket(Packet pkg)
         {
             int dst = pkg.Dst;
@@ -323,22 +338,27 @@ namespace HeterogeneousForward
                 return true;
             }
 
-            if(this.Id!=pkg.Src &&CheckTags(pkg) == false)
+            if (this.Id != pkg.Src && CheckTags(pkg) == false)
                 return false;
+
+            //是否为某个swHub
+            int nextId = FindNextNodeInSWHubRouteTable(dst, pkg.Tags);
+            if (nextId > 0)
+            {
+                PingedSWHub entity = this.cachedPingedSWHubs[dst][nextId];
+                pkg.Prev = this.Id;
+                pkg.Next = nextId;
+                pkg.PrevType = pkg.NextType = NodeType.READER;
+                //pkg.TTL = Math.Max(entity.hops + 1, pkg.TTL);
+                this.retryOnSendingFailture = true;
+                SendPacketDirectly(scheduler.currentTime, pkg);
+                this.retryOnSendingFailture = false;
+                return true;
+            }
 
             //have to flood...
             SendAODVData(pkg);
             return true;
-        }
-
-        SWHubCandidate GetSWHubCandidate(int id)
-        {
-            foreach (SWHubCandidate c in this.swHubCandidates)
-            {
-                if (c.nodeId == id)
-                    return c;
-            }
-            return null;
         }
 
         public void SendSWData(Packet pkg)
@@ -401,14 +421,17 @@ namespace HeterogeneousForward
                     {
                         SendSmallWorldRequest(this.swHubCandidates[i], pkg);
                     }*/
-                    foreach(int swHub in this.cachedPingedSWHubs.Keys)
-                    {                     
+                    foreach (int swHub in this.cachedPingedSWHubs.Keys)
+                    {
                         Dictionary<int, PingedSWHub> p = this.cachedPingedSWHubs[swHub];
-                        int nextId1 = GetNextNodeOfLestHopsFromSwHub(p, pkg.Tags);
-                        if (nextId1 > 0)
-                            SendSmallWorldRequest(swHub, nextId1, pkg);
-                        else
+                        int nextId1 = GetNextNodeOfLestHopsFromSwHub(p, pkg.Tags, global.aggressivelyLookForSwHub);
+                        if (nextId1 < 0)
+                        {
+                            nextId1 = swHub;
                             Console.WriteLine("Next node not found for hub Reader{0}", swHub);
+                        }
+                        else
+                            SendSmallWorldRequest(swHub, nextId1, pkg);
                     }
                 }
                 else
@@ -417,7 +440,7 @@ namespace HeterogeneousForward
                     if (nearestSWHub > 0)
                     {
                         Dictionary<int, PingedSWHub> p = this.cachedPingedSWHubs[nearestSWHub];
-                        int nextId1 = GetNextNodeOfLestHopsFromSwHub(p, pkg.Tags);
+                        int nextId1 = GetNextNodeOfLestHopsFromSwHub(p, pkg.Tags, global.aggressivelyLookForSwHub);
                         if (nextId1 > 0)
                             SendSmallWorldRequest(nearestSWHub, nextId1, pkg);
                         else
@@ -462,9 +485,13 @@ namespace HeterogeneousForward
             foreach (int nextId in p.Keys)
             {
                 PingedSWHub h = p[nextId];
-                //Console.WriteLine("nextId:{0}, hops:{1}, time:{2}, tags:{3}", nextId, h.hops, h.time, h.tags);
-                if (h.hops < hx && IsAllowedTags(h.tags, tags)&&
-                     scheduler.currentTime-h.time<global.beaconInterval)
+                if (global.debug)
+                    Console.WriteLine("debug nextId:{0}, hops:{1}, local time:{2}, remote time:{3} tags:{4}", nextId, h.hops, h.localUpdateTime, h.remoteUpdateTime, h.tags);
+
+                //这里要考虑beacon的跳数对延迟的影响
+                if (h.hops < hx && IsAllowedTags(h.tags, tags)
+                    && IsFreshRecord(h.hops, h.remoteUpdateTime, global.beaconInterval, global.beaconInterval * h.hops)
+                    && IsFreshRecord(h.hops, h.localUpdateTime, global.beaconInterval / 2, Math.Min(4, global.beaconInterval)))
                 {
                     hx = h.hops;
                 }
@@ -472,13 +499,33 @@ namespace HeterogeneousForward
             return hx;
         }
 
-        int GetNextNodeOfLestHopsFromSwHub(Dictionary<int, PingedSWHub> p, uint tags)
+        int GetNextNodeOfLestHopsFromSwHub(Dictionary<int, PingedSWHub> p, uint tags, bool aggressivelyLookForSwHub)
         {
             int hx = 999;
             int next = -1;
             foreach (int n in p.Keys)
             {
                 PingedSWHub h = p[n];
+
+                //这里要考虑beacon的跳数对延迟的影响
+                if (h.hops < hx && IsAllowedTags(h.tags, tags)
+                    && IsFreshRecord(h.hops, h.remoteUpdateTime, global.beaconInterval, global.beaconInterval * h.hops)
+                    && IsFreshRecord(h.hops, h.localUpdateTime, global.beaconInterval / 2, Math.Min(4, global.beaconInterval)))
+                {
+                    hx = h.hops;
+                    next = n;
+                }
+            }
+            if (aggressivelyLookForSwHub == false)//无需强制返回结果
+                return next;
+            if (next > 0)
+                return next;
+            //比较时间没有结果，那就不比较了
+            foreach (int n in p.Keys)
+            {
+                PingedSWHub h = p[n];
+
+                //这里要考虑beacon的跳数对延迟的影响
                 if (h.hops < hx && IsAllowedTags(h.tags, tags))
                 {
                     hx = h.hops;
@@ -501,7 +548,8 @@ namespace HeterogeneousForward
                 Dictionary<int, PingedSWHub> p = this.cachedPingedSWHubs[swHub];
 
                 int hx = GetLestHopsFromSwHub(p, tags);
-                //Console.WriteLine("p:{0}, hx:{1}", swHub, hx);
+                if(global.debug)
+                    Console.WriteLine("debug p:{0}, hx:{1}", swHub, hx);
                 if (hx < mh)
                 {
                     mh = hx;
@@ -511,23 +559,27 @@ namespace HeterogeneousForward
             return ns;
         }
 
-        bool IsAllowedTags(uint selfTags, uint tags)
-        {
-            return (selfTags | tags) == selfTags;
-        }
 
         public int FindNextNodeInSWHubRouteTable(int dst, uint tags)
         {
-            if(!this.cachedPingedSWHubs.ContainsKey(dst))
+            if (!this.cachedPingedSWHubs.ContainsKey(dst))
                 return -2;
-            foreach(int nextId in this.cachedPingedSWHubs[dst].Keys)
+            foreach (int nextId in this.cachedPingedSWHubs[dst].Keys)
             {
                 PingedSWHub p = this.cachedPingedSWHubs[dst][nextId];
-                if(IsAllowedTags(p.tags, tags) 
-                    && IsFreshRecord(p.hops, p.time))
+                //这里要考虑beacon的跳数对延迟的影响
+                if (IsAllowedTags(p.tags, tags)
+                    //&& IsFreshRecord(p.hops, p.localUpdateTime, global.beaconInterval / 2, Math.Min(4, global.beaconInterval)))
+                    && IsFreshRecord(p.hops, p.remoteUpdateTime, global.beaconInterval, global.beaconInterval * p.hops)
+                    && IsFreshRecord(p.hops, p.localUpdateTime, global.beaconInterval / 2, Math.Min(4, global.beaconInterval)))
                     return nextId;
             }
             return -2;
+        }
+
+        bool IsAllowedTags(uint selfTags, uint tags)
+        {
+            return (selfTags | tags) == selfTags;
         }
 
 
@@ -593,6 +645,7 @@ namespace HeterogeneousForward
             SendPacketDirectly(scheduler.currentTime, pkg);
         }
 
+        /*
         public override void RecvPingRequest(Packet pkg)
         {
             Reader node = global.readers[pkg.Prev];
@@ -609,9 +662,9 @@ namespace HeterogeneousForward
 
                 PingedSWHub p = d[pkg.Prev];
                 //很久之前的，或可用tag更大，则更新
-                if (scheduler.currentTime - p.time >= 5 || CaculateTagNum(p.tags) < CaculateTagNum((uint)pkg.Data))
+                if (scheduler.currentTime - p.localUpdateTime >= 5 || CaculateTagNum(p.tags) < CaculateTagNum((uint)pkg.Data))
                 {
-                    p.time = scheduler.currentTime;
+                    p.localUpdateTime = scheduler.currentTime;
                     p.hops = global.TTL - pkg.TTL;
                     p.tags = (uint)pkg.Data;
                 }
@@ -628,7 +681,7 @@ namespace HeterogeneousForward
             pkg1.Prev = this.Id;
             //Console.WriteLine("debug pkg ttl: {0}", pkg1.TTL);
             SendPacketDirectly(scheduler.currentTime, pkg);
-        }
+        }*/
 
 
         public void SendSmallWorldRequest(int dstId, int nextId, Packet pkg)
@@ -640,6 +693,7 @@ namespace HeterogeneousForward
             pkg1.Next = nextId;
             pkg1.Src = this.Id;
             pkg1.Type = PacketType.SW_REQUEST;
+            pkg1.TTL = global.outerSWTTL;
             this.retryOnSendingFailture = true;
             SendData(pkg1);
             this.retryOnSendingFailture = false;
@@ -647,6 +701,11 @@ namespace HeterogeneousForward
 
         public void RecvSmallWorldRequest(Packet pkg)
         {
+            if (CheckTags(pkg) == false)
+            {
+                Console.WriteLine("reader{0} rejects tag{1} from reader{2}", this.Id, pkg.Tags, pkg.Prev);
+                return;
+            }
             string origPkgId = NodeType.READER.ToString() + pkg.SWRequest.origSrc + "-" + NodeType.READER.ToString() + pkg.SWRequest.origDst + ":" + pkg.SWRequest.origSenderSeq;
             if (global.debug)
                 Console.WriteLine("debug: RecvSmallWorldRequest orig packet Id:{0}, ttl:{1}", origPkgId, pkg.TTL);
@@ -825,13 +884,13 @@ namespace HeterogeneousForward
             Dictionary<int, PingedSWHub> p = new Dictionary<int, PingedSWHub>();
             foreach (int dst in this.cachedPingedSWHubs.Keys)
             {
-                PingedSWHub nextEntity = getMaxTagFromPingedSwHub(this.cachedPingedSWHubs[dst]);
+                PingedSWHub nextEntity = getNearestMaxTagFromPingedSwHub(this.cachedPingedSWHubs[dst]);
                 if (nextEntity != null)
-                    p.Add(dst, new PingedSWHub(nextEntity.hops, nextEntity.tags, nextEntity.time));
+                    p.Add(dst, new PingedSWHub(nextEntity.hops, nextEntity.tags & this.availTagEntity.allowTags, scheduler.currentTime, nextEntity.remoteUpdateTime));
             }
 
             if (this.isSwHub == true)
-                p.Add(this.Id, new PingedSWHub(0, this.availTagEntity.allowTags, scheduler.currentTime));
+                p.Add(this.Id, new PingedSWHub(0, this.availTagEntity.allowTags, scheduler.currentTime, scheduler.currentTime));
 
             pkg.Data = new HFBeaconData(this.forwardStrategies, GetNearMaxCandidates(), p);
             SendPacketDirectly(time, pkg);
@@ -840,17 +899,17 @@ namespace HeterogeneousForward
             if (scheduler.currentTime < global.beaconWarming)
                 nextBeacon = (float)(Utility.P_Rand(10 * (global.beaconWarmingInterval + 0.4)) / 10);//0.5是为了设定最小值
             else if (this.Speed != null && this.Speed.Count > 0 && this.Speed[0] > 1f) //当节点运动时，beacon应频繁些
-                nextBeacon = (float)(Utility.P_Rand(4 * global.beaconInterval) / 4);
+                nextBeacon = (float)(Utility.P_Rand(10 * global.beaconInterval/4) / 10);
             else
                 nextBeacon = (float)(Utility.P_Rand(10 * global.beaconInterval) / 10);
             Event.AddEvent(new Event(scheduler.currentTime + nextBeacon, EventType.SND_BCN, this, null));
         }
 
-        public PingedSWHub getMaxTagFromPingedSwHub(Dictionary<int, PingedSWHub> p)
+        public PingedSWHub getNearestMaxTagFromPingedSwHub(Dictionary<int, PingedSWHub> p)
         {
             uint tags = 0;
-            PingedSWHub nextEntity = null;
-            //从p中获得最大的tags
+            List<PingedSWHub> list = new List<PingedSWHub>();
+            //从p中获得最大的tags列表
             foreach (int n in p.Keys)
             {
                 PingedSWHub h = p[n];
@@ -863,8 +922,23 @@ namespace HeterogeneousForward
                     continue;
                 if((h.tags | tags) == h.tags)
                 {
+                    if (h.tags != tags)
+                    {
+                        list.Clear();
+                    }
                     tags = h.tags;
-                    nextEntity = h;
+                    list.Add(h);
+                }
+            }
+            //从列表中找到最近的节点
+            PingedSWHub nextEntity = null;
+            int mhop = 999;
+            foreach (PingedSWHub entity in list)
+            {
+                if (entity.hops < mhop)
+                {
+                    mhop = entity.hops;
+                    nextEntity = entity;
                 }
             }
             return nextEntity;
@@ -970,15 +1044,15 @@ namespace HeterogeneousForward
                     if (!this.cachedPingedSWHubs.ContainsKey(dst))
                         this.cachedPingedSWHubs.Add(dst, new Dictionary<int, PingedSWHub>());
                     if (!this.cachedPingedSWHubs[dst].ContainsKey(pkg.Prev))
-                        this.cachedPingedSWHubs[dst].Add(pkg.Prev, new PingedSWHub(hub.hops + 1, hub.tags, scheduler.currentTime));
+                        this.cachedPingedSWHubs[dst].Add(pkg.Prev, new PingedSWHub(hub.hops + 1, hub.tags, scheduler.currentTime, hub.remoteUpdateTime));
                     else
                     {
                         this.cachedPingedSWHubs[dst][pkg.Prev].hops = hub.hops + 1;
                         this.cachedPingedSWHubs[dst][pkg.Prev].tags = hub.tags;
-                        this.cachedPingedSWHubs[dst][pkg.Prev].time = scheduler.currentTime;
+                        this.cachedPingedSWHubs[dst][pkg.Prev].localUpdateTime = scheduler.currentTime;
+                        this.cachedPingedSWHubs[dst][pkg.Prev].remoteUpdateTime = hub.remoteUpdateTime;
                     }
                 }
-
             }
         }
 
@@ -994,21 +1068,13 @@ namespace HeterogeneousForward
 
         private bool CheckTags(Packet pkg)
         {
-            //ping消息不需要检查
-            if (pkg.Type == PacketType.PING_REQUEST || pkg.Type == PacketType.PING_RESPONSE)
-                return true;
             uint tags = pkg.Tags;
             foreach (ForwardStrategy f in forwardStrategies)//one found.
             {
-                if ((tags & f.Tags) == f.Tags)
+                if(f.Action == ForwardStrategyAction.REFUSE && (tags & f.Tags) != 0)
                 {
-                    if (f.Action == ForwardStrategyAction.REFUSE)
-                    {
-                        Console.WriteLine("{0:F4} [{1}] {2}{3} drop from {4}{5} due to FORWARD_STRATEGIES", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev);
-                        return false;
-                    }
-                    else
-                        break;
+                    Console.WriteLine("{0:F4} [{1}] {2}{3} drop from {4}{5} due to FORWARD_STRATEGIES", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev);
+                    return false;
                 }
             }
             return true;

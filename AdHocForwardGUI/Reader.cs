@@ -380,8 +380,20 @@ namespace AdHocBaseApp
 
         public bool IsFreshRecord(int hops, double time)
         {
-            return ((hops >1 && scheduler.currentTime - time < Math.Min(4, global.beaconInterval))
+            return ((hops >1 && scheduler.currentTime - time < Math.Min(5, global.beaconInterval))
                 || (hops == 1 && scheduler.currentTime - time < global.beaconInterval / 2));
+        }
+
+        public bool IsFreshRecord2(int hops, double time)
+        {
+            return ((hops > 1 && scheduler.currentTime - time < Math.Min(4, global.beaconInterval))
+                || (hops == 1 && scheduler.currentTime - time < global.beaconInterval / 2));
+        }
+
+        public bool IsFreshRecord(int hops, double time, double oneHopTime, double multiHopTime)
+        {
+            return ((hops > 1 && scheduler.currentTime - time < multiHopTime)
+                || (hops == 1 && scheduler.currentTime - time < oneHopTime));
         }
 
         virtual public void RecvBeacon(Packet pkg)
