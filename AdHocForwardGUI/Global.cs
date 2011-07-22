@@ -229,6 +229,8 @@ namespace AdHocBaseApp
                 wiredProportion = float.Parse(v[1]);
             else if (v[0] == "check_cert_delay")
                 checkCertDelay = float.Parse(v[1]);
+            else if (v[0] == "routeMethod")
+                routeMethod = (RouteMethod)Enum.Parse(typeof(RouteMethod), v[1], true);
             Console.WriteLine(v[0] + ":" + v[1]);
         }
 

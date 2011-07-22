@@ -34,6 +34,8 @@ namespace HeterogeneousForward
 
         public bool aggressivelyLookForSwHub = false;
 
+        public uint currentSendingTags = 0; //用于画图时将一些允许标签的节点画出来
+
         public ForwardStrategyAction defaultForwardStrategyAction;
 
         new public static HFGlobal ProduceGlobal()

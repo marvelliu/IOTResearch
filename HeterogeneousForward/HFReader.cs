@@ -139,6 +139,12 @@ namespace HeterogeneousForward
 
         public override void RecvAODVRequest(Packet pkg)
         {
+            if (global.routeMethod == RouteMethod.AODV)
+            {
+                base.RecvAODVRequest(pkg);
+                return;
+            }
+
             if (CheckTags(pkg) == false)
             {
                 Console.WriteLine("reader{0} rejects tag{1} from reader{2}", this.Id, pkg.Tags, pkg.Prev);
@@ -206,6 +212,11 @@ namespace HeterogeneousForward
 
         public override void RecvAODVReply(Packet pkg)
         {
+            if (global.routeMethod == RouteMethod.AODV)
+            {
+                base.RecvAODVReply(pkg);
+                return;
+            }
             Reader node = global.readers[pkg.Prev];
 
             if (!Neighbors.ContainsKey(node.Id))
@@ -259,6 +270,11 @@ namespace HeterogeneousForward
 
         public override void SendAODVData(Packet pkg, int dst)
         {
+            if (global.routeMethod == RouteMethod.AODV)
+            {
+                base.SendAODVData(pkg, dst);
+                return;
+            }
             Reader node = global.readers[pkg.Prev];
             //Check Route Table
 
@@ -312,6 +328,10 @@ namespace HeterogeneousForward
         //RoutePacket只是路由普通的数据包，并非专门发往swhub的
         public override bool RoutePacket(Packet pkg)
         {
+            if (global.routeMethod == RouteMethod.AODV)
+            {
+                return base.RoutePacket(pkg);
+            }
             int dst = pkg.Dst;
             if (pkg.SrcSenderSeq < 0)//未定该数据包的id
                 initPacketSeq(pkg);
@@ -408,8 +428,7 @@ namespace HeterogeneousForward
             }
 
             //如果没找到，则发往所有的swHub
-            if (global.routeMethod == RouteMethod.SmallWorld && 
-                pkg.Type != PacketType.PING_REQUEST && pkg.Type!= PacketType.PING_RESPONSE && pkg.Type!= PacketType.SW_REQUEST
+            if ( pkg.Type != PacketType.PING_REQUEST && pkg.Type!= PacketType.PING_RESPONSE && pkg.Type!= PacketType.SW_REQUEST
                 && this.swHubCandidates.Count >0)
             {
                 //如果是swHub，转发到所有hub，否则只转发到最近的hub
@@ -462,6 +481,12 @@ namespace HeterogeneousForward
 
         public override void AddPendingAODVData(Packet pkg)
         {
+            if (global.routeMethod == RouteMethod.AODV)
+            {
+                base.AddPendingAODVData(pkg);
+                return;
+            }
+
             int dst = pkg.Dst;
             uint tags = pkg.Tags;
             string key = dst + "-" + tags;
@@ -577,9 +602,22 @@ namespace HeterogeneousForward
             return -2;
         }
 
-        bool IsAllowedTags(uint selfTags, uint tags)
+        public bool IsAllowedTags(uint selfTags, uint tags)
         {
             return (selfTags | tags) == selfTags;
+        }
+
+
+        public bool IsAllowedTags(uint tags)
+        {
+            if (scheduler.currentTime > 0 && this.forwardStrategies != null)
+            {
+                if(this.availTagEntity == null)
+                    this.availTagEntity = CaculateTagEntity(this.forwardStrategies);
+                return (this.availTagEntity.allowTags | tags) == this.availTagEntity.allowTags;
+            }
+            else
+                return false;
         }
 
 
@@ -623,11 +661,18 @@ namespace HeterogeneousForward
 
         public override bool SendData(Packet pkg)
         {
-            Console.WriteLine("packetSeq:{0}", this.packetSeq);
-            if(this.Id == pkg.Src)
-                SendSWData(pkg);
-            else
+            //Console.WriteLine("packetSeq:{0}", this.packetSeq);
+            if (global.routeMethod == RouteMethod.AODV)
                 RoutePacket(pkg);
+            else if (global.routeMethod == RouteMethod.SmallWorld)//否则为smallworld方法
+            {
+                if (this.Id == pkg.Src)
+                    SendSWData(pkg);
+                else
+                    RoutePacket(pkg);
+            }
+            else
+                throw new Exception("Unknown RouteMethod " + global.routeMethod);
             return true;
         }
 
@@ -802,7 +847,7 @@ namespace HeterogeneousForward
                 allowTags = allowTags & ~f.Tags;
             }
                 
-            uint mask = (uint)(1 << global.tagNameNum+1)-1;
+            uint mask = (uint)(1 << (global.tagNameNum-1)+1)-1;
             allowTags = allowTags & mask; //0(32-tagnum)1(tagnum)
 
             /*

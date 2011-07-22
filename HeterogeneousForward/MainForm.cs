@@ -88,7 +88,7 @@ namespace HeterogeneousForward
 
         void DrawNodes(Graphics gc)
         {
-            Global global = Global.getInstance();
+            HFGlobal global = (HFGlobal)Global.getInstance();
             if (global.nodraw)
                 return;
             if (inited == false)
@@ -116,15 +116,15 @@ namespace HeterogeneousForward
             {
                 HFReader reader = (HFReader)global.readers[i];
                 //brush = new SolidBrush(Organization.colors[reader.OrgId]);
-                if(reader.isSwHub == true)
+                if (reader.isSwHub == true)
                     brush = new SolidBrush(Color.Red);
+                else if (reader.IsAllowedTags(global.currentSendingTags) && global.currentSendingTags!=0)
+                    brush = new SolidBrush(Color.Blue);
                 else
                     brush = new SolidBrush(Color.Black);
 
                 gc.DrawString("R"+reader.Id.ToString(), new Font("arial", 10), brush,
                     (float)reader.X + (float)offsetX, (float)reader.Y + (float)offsetY);
-                if (reader.IsGateway)
-                    brush = new SolidBrush(Color.Black);
 
                 gc.FillEllipse(brush, (float)reader.X - r / 2 + offsetX,
                     (float)reader.Y - r / 2 + offsetY, r, r);
