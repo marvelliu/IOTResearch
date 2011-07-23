@@ -200,10 +200,26 @@ namespace HeterogeneousForward
 
         private void generateSendDataToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            SendForm f = new SendForm();
+            f.ShowDialog();
+            if (f.ok != true)
+                return;
+
             HFGlobal global = (HFGlobal)Global.getInstance();
-            EventGenerator generator = new EventGenerator();
-            generator.ClearEvents(global.eventsFileName, "SND_DATA");
-            generator.GenerateSendEvents(true, false, global.objects, global.orgs, "SND_DATA");
+            HFEventGenerator generator = new HFEventGenerator();
+            Node[] froms = null;
+            Node[] tos = null;
+            if(f.fromType == NodeType.READER)
+                froms = global.readers;
+            else
+                throw new Exception("Wrong node type");
+            
+            if(f.toType == NodeType.READER)
+                tos = global.readers;
+            else
+                throw new Exception("Wrong node type");
+            
+            generator.GenerateSendEvents(f.clear, false, froms, tos, "SND_DATA", f.minDist, 2, f.generateMode);
             MessageBox.Show("Done");
         }
 

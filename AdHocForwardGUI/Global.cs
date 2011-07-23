@@ -92,6 +92,7 @@ namespace AdHocBaseApp
         public string eventsFileName = "events.txt";    
         public int TTL = 5;
 
+        //最多发送次数
         public int SendEventNum = 10;
         public int SendEventMinTagNum = 1;
         public int SendEventMaxTagNum = 5;
