@@ -52,7 +52,7 @@ namespace AdHocBaseApp
         NATIVE_GROUP_RESPONSE,
         NATIVE_LONG_GROUP_REQUEST,
         NATIVE_LONG_GROUP_RESPONSE,
-        SW_REQUEST,
+        SW_DATA,
         UNKNOWN
     }
 
@@ -114,7 +114,7 @@ namespace AdHocBaseApp
         public int origSrc;
         public PacketType origType;
         public int origSenderSeq;
-        public int ttl;
+        public int swTTL;
 
         public SWRequestField(int origSrc, int origDst, int origSenderSeq, PacketType origType, int ttl)
         {
@@ -122,7 +122,7 @@ namespace AdHocBaseApp
             this.origDst = origDst;
             this.origSenderSeq = origSenderSeq;
             this.origType = origType;
-            this.ttl = ttl;
+            this.swTTL = ttl;
         }
     }
 
@@ -643,6 +643,7 @@ namespace AdHocBaseApp
         public int PrevSenderSeq; //pkg.Prev节点发送的数据包数
         public bool seqInited = false;
 
+        public bool inited = false;
 
         public BeaconField Beacon;
         public AODVRequestField AODVRequest;

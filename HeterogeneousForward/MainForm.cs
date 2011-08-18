@@ -28,10 +28,8 @@ namespace HeterogeneousForward
             HFOrganization.GenerateNodes();
             HFOrganization.GenerateOrganizations();
             HFOrganization.GenerateNodePositionsAllRandom();
-            HFOrganization.GenerateObjectPositionsAllRandom();
             HFEventManager handler = new HFEventManager();
             handler.LoadEvents(false);
-            //IOTReader.SetReaderTypes();
             //HFReader.AddDefaultForwardStrategy();
 
             global.mainForm = (MainForm)this;
@@ -118,16 +116,33 @@ namespace HeterogeneousForward
                 //brush = new SolidBrush(Organization.colors[reader.OrgId]);
                 if (reader.isSwHub == true)
                     brush = new SolidBrush(Color.Red);
-                else if (reader.IsAllowedTags(global.currentSendingTags) && global.currentSendingTags!=0)
+                else if (reader.IsAllowedTags(global.currentSendingTags) && global.currentSendingTags != 0)
                     brush = new SolidBrush(Color.Blue);
                 else
                     brush = new SolidBrush(Color.Black);
 
-                gc.DrawString("R"+reader.Id.ToString(), new Font("arial", 10), brush,
+                gc.DrawString("R" + reader.Id.ToString(), new Font("arial", 10), brush,
                     (float)reader.X + (float)offsetX, (float)reader.Y + (float)offsetY);
 
                 gc.FillEllipse(brush, (float)reader.X - r / 2 + offsetX,
                     (float)reader.Y - r / 2 + offsetY, r, r);
+
+
+                pen = new Pen(brush);
+                if (global.currentSendingTags>0 && reader.IsAllowedTags(global.currentSendingTags))
+                {
+                    lock (reader.Neighbors)
+                    {
+                        foreach (Neighbor nb in new List<Neighbor>(reader.Neighbors.Values))
+                        {
+                            HFReader node = (HFReader)nb.node;
+                            if (global.drawLine && node.IsAllowedTags(global.currentSendingTags))
+                                gc.DrawLine(pen, (float)reader.X + offsetX,
+                                    (float)reader.Y + offsetY,
+                                    (float)node.X + offsetX, (float)node.Y + offsetY);
+                        }
+                    }
+                }
 
             }
             showed = 0;
@@ -175,6 +190,8 @@ namespace HeterogeneousForward
             generator.GenerateRandomObjectMotionEvents(true, nodeSpeed, eventCount, nodeCount, NodeType.READER, filename);
             HFEventManager manager = new HFEventManager();
             manager.LoadEvents(clear);
+            if (f.outputAsDefault)
+                global.eventsFileName = f.filename;
             MessageBox.Show("Done");
         }
 

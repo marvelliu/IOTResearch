@@ -39,6 +39,7 @@
             this.txtEventCount = new System.Windows.Forms.TextBox();
             this.label4 = new System.Windows.Forms.Label();
             this.txtOutfile = new System.Windows.Forms.TextBox();
+            this.checkOutputAsDefault = new System.Windows.Forms.CheckBox();
             this.SuspendLayout();
             // 
             // btnOK
@@ -46,7 +47,7 @@
             this.btnOK.Location = new System.Drawing.Point(62, 275);
             this.btnOK.Name = "btnOK";
             this.btnOK.Size = new System.Drawing.Size(75, 23);
-            this.btnOK.TabIndex = 0;
+            this.btnOK.TabIndex = 6;
             this.btnOK.Text = "OK";
             this.btnOK.UseVisualStyleBackColor = true;
             this.btnOK.Click += new System.EventHandler(this.btnOK_Click);
@@ -57,7 +58,7 @@
             this.btnCancel.Location = new System.Drawing.Point(235, 275);
             this.btnCancel.Name = "btnCancel";
             this.btnCancel.Size = new System.Drawing.Size(75, 23);
-            this.btnCancel.TabIndex = 1;
+            this.btnCancel.TabIndex = 7;
             this.btnCancel.Text = "Cancel";
             this.btnCancel.UseVisualStyleBackColor = true;
             // 
@@ -66,8 +67,8 @@
             this.txtNodeRatio.Location = new System.Drawing.Point(176, 34);
             this.txtNodeRatio.Name = "txtNodeRatio";
             this.txtNodeRatio.Size = new System.Drawing.Size(100, 21);
-            this.txtNodeRatio.TabIndex = 2;
-            this.txtNodeRatio.Text = "0.1";
+            this.txtNodeRatio.TabIndex = 1;
+            this.txtNodeRatio.Text = "0.3";
             this.txtNodeRatio.TextChanged += new System.EventHandler(this.txtNodeRatio_TextChanged);
             // 
             // label1
@@ -105,7 +106,7 @@
             this.txtNodeSpeed.Location = new System.Drawing.Point(176, 78);
             this.txtNodeSpeed.Name = "txtNodeSpeed";
             this.txtNodeSpeed.Size = new System.Drawing.Size(100, 21);
-            this.txtNodeSpeed.TabIndex = 6;
+            this.txtNodeSpeed.TabIndex = 2;
             this.txtNodeSpeed.Text = "10";
             this.txtNodeSpeed.TextChanged += new System.EventHandler(this.txtNodeSpeed_TextChanged);
             // 
@@ -123,7 +124,7 @@
             this.txtEventCount.Location = new System.Drawing.Point(176, 128);
             this.txtEventCount.Name = "txtEventCount";
             this.txtEventCount.Size = new System.Drawing.Size(100, 21);
-            this.txtEventCount.TabIndex = 8;
+            this.txtEventCount.TabIndex = 3;
             this.txtEventCount.Text = "15";
             this.txtEventCount.TextChanged += new System.EventHandler(this.txtEventCount_TextChanged);
             // 
@@ -141,7 +142,19 @@
             this.txtOutfile.Location = new System.Drawing.Point(146, 208);
             this.txtOutfile.Name = "txtOutfile";
             this.txtOutfile.Size = new System.Drawing.Size(260, 21);
-            this.txtOutfile.TabIndex = 10;
+            this.txtOutfile.TabIndex = 5;
+            // 
+            // checkOutputAsDefault
+            // 
+            this.checkOutputAsDefault.AutoSize = true;
+            this.checkOutputAsDefault.Checked = true;
+            this.checkOutputAsDefault.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.checkOutputAsDefault.Location = new System.Drawing.Point(40, 235);
+            this.checkOutputAsDefault.Name = "checkOutputAsDefault";
+            this.checkOutputAsDefault.Size = new System.Drawing.Size(180, 16);
+            this.checkOutputAsDefault.TabIndex = 12;
+            this.checkOutputAsDefault.Text = "Set output as default file";
+            this.checkOutputAsDefault.UseVisualStyleBackColor = true;
             // 
             // MoveForm
             // 
@@ -150,6 +163,7 @@
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.CancelButton = this.btnCancel;
             this.ClientSize = new System.Drawing.Size(418, 326);
+            this.Controls.Add(this.checkOutputAsDefault);
             this.Controls.Add(this.label4);
             this.Controls.Add(this.txtOutfile);
             this.Controls.Add(this.label2);
@@ -182,5 +196,6 @@
         private System.Windows.Forms.TextBox txtEventCount;
         private System.Windows.Forms.Label label4;
         private System.Windows.Forms.TextBox txtOutfile;
+        private System.Windows.Forms.CheckBox checkOutputAsDefault;
     }
 }

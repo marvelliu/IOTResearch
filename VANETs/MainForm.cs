@@ -129,14 +129,14 @@ namespace VANETs
             Global global = Global.getInstance();
             for (int i = 0; i < global.orgNum; i++)
             {
-                sb.AppendLine((global.orgs[i].Id + " " + global.orgs[i].Name + " " + global.orgs[i].Nodes.Count));
+                sb.AppendLine((global.orgs[i].Id + " " + global.orgs[i].Name + " " + global.orgs[i].nodes.Count));
                 Organization org = global.orgs[i];
-                for (int j = 0; j < org.Nodes.Count; j++)
+                for (int j = 0; j < org.nodes.Count; j++)
                 {
-                    sb.Append("\t" + org.Nodes[j].Id + ":" + org.Nodes[j].OrgId
-                        + " (" + org.Nodes[j].X + "," + org.Nodes[j].Y + ")");
+                    sb.Append("\t" + org.nodes[j].Id + ":" + org.nodes[j].OrgId
+                        + " (" + org.nodes[j].X + "," + org.nodes[j].Y + ")");
                     if (j > 0)
-                        sb.AppendLine("\t"+Utility.Distance(org.Nodes[j], org.Nodes[j - 1]).ToString());
+                        sb.AppendLine("\t"+Utility.Distance(org.nodes[j], org.nodes[j - 1]).ToString());
                     else
                         sb.AppendLine();
                 }

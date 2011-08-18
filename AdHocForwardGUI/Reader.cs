@@ -543,7 +543,7 @@ namespace AdHocBaseApp
             // to itself
             if (pkg.Dst == Id && pkg.DstType == NodeType.READER)
             {
-                Console.WriteLine("{0:F4} [{1}] {2}{3}->{4}{5}, total: {6}", scheduler.currentTime, pkg.Type, pkg.SrcType, pkg.Src, this.type, this.Id, scheduler.currentTime - pkg.beginSentTime);
+                Console.WriteLine("{0:F4} [{1}] {2}{3}->{4}{5}, total: {6}", scheduler.currentTime, "RECV_DATA", pkg.SrcType, pkg.Src, this.type, this.Id, scheduler.currentTime - pkg.beginSentTime);
                 return true;
             }
 

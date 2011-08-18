@@ -866,7 +866,7 @@ namespace TrustArch
             for (int i = 0; i < badOrgNum; i++)
             {
                 int badOrg = badOrgs[i];
-                int badNodeNum = (int)(badNodeRates[i] * g.orgs[badOrg].Nodes.Count);
+                int badNodeNum = (int)(badNodeRates[i] * g.orgs[badOrg].nodes.Count);
                 ReaderType badNodeType = badNodeTypes[i];
                 if (r[badOrg].ContainsKey(badNodeType))
                 {
@@ -889,8 +889,8 @@ namespace TrustArch
                         IOTReader reader  = null;
                         do
                         {
-                            n = (int)Utility.U_Rand(g.orgs[org].Nodes.Count);
-                            reader = (IOTReader)g.orgs[org].Nodes[n];
+                            n = (int)Utility.U_Rand(g.orgs[org].nodes.Count);
+                            reader = (IOTReader)g.orgs[org].nodes[n];
                         } while (reader.readerType != ReaderType.NORMAL || reader.IsGateway);
                         //这里假定网关不是恶意节点，否则就抛弃所有数据包了……
                         reader.readerType = type;

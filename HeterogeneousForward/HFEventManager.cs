@@ -25,8 +25,8 @@ namespace HeterogeneousForward
                 {
                     int orgId = ((Reader)src).OrgId;
                     Organization org = (Organization)Node.getNode(orgId, NodeType.ORG);
-                    int n = (int)Utility.U_Rand(org.Nodes.Count);
-                    dst = org.Nodes[n];
+                    int n = (int)Utility.U_Rand(org.nodes.Count);
+                    dst = org.nodes[n];
                 }
 
 
@@ -97,9 +97,9 @@ namespace HeterogeneousForward
                 else//org
                 {
                     HFOrganization org = (HFOrganization)node;
-                    for (int i = 0; i < org.Nodes.Count; i++)
+                    for (int i = 0; i < org.nodes.Count; i++)
                     {
-                        HFReader reader = (HFReader)org.Nodes[i];
+                        HFReader reader = (HFReader)org.nodes[i];
                         reader.forwardStrategies.Add(new ForwardStrategy(tags, action));
                     }
                 }

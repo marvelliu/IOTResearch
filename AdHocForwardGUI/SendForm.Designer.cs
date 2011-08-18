@@ -56,19 +56,19 @@
             // 
             this.cmbType.FormattingEnabled = true;
             this.cmbType.Items.AddRange(new object[] {
-            "Overwrite existing items",
-            "Generate new items"});
+            "Generate new items",
+            "Overwrite existing items"});
             this.cmbType.Location = new System.Drawing.Point(143, 49);
             this.cmbType.Name = "cmbType";
             this.cmbType.Size = new System.Drawing.Size(191, 20);
             this.cmbType.TabIndex = 1;
-            this.cmbType.Text = "Overwrite existing items";
+            this.cmbType.Text = "Generate new items";
             this.cmbType.SelectedIndexChanged += new System.EventHandler(this.cmbType_SelectedIndexChanged);
             // 
             // btnCancel
             // 
             this.btnCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
-            this.btnCancel.Location = new System.Drawing.Point(226, 274);
+            this.btnCancel.Location = new System.Drawing.Point(225, 274);
             this.btnCancel.Name = "btnCancel";
             this.btnCancel.Size = new System.Drawing.Size(75, 23);
             this.btnCancel.TabIndex = 2;
@@ -134,7 +134,7 @@
             // label4
             // 
             this.label4.AutoSize = true;
-            this.label4.Location = new System.Drawing.Point(73, 196);
+            this.label4.Location = new System.Drawing.Point(22, 191);
             this.label4.Name = "label4";
             this.label4.Size = new System.Drawing.Size(269, 12);
             this.label4.TabIndex = 9;
@@ -142,7 +142,7 @@
             // 
             // numMinDist
             // 
-            this.numMinDist.Location = new System.Drawing.Point(143, 215);
+            this.numMinDist.Location = new System.Drawing.Point(142, 206);
             this.numMinDist.Maximum = new decimal(new int[] {
             1400,
             0,
@@ -152,7 +152,7 @@
             this.numMinDist.Size = new System.Drawing.Size(120, 21);
             this.numMinDist.TabIndex = 10;
             this.numMinDist.Value = new decimal(new int[] {
-            400,
+            800,
             0,
             0,
             0});

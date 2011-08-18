@@ -71,28 +71,28 @@ namespace AdHocBaseApp
                 brush = new SolidBrush(Organization.colors[i]);
                 pen = new Pen(brush);
                 Organization org = global.orgs[i];
-                for (int j = 0; j < org.Nodes.Count; j++)
+                for (int j = 0; j < org.nodes.Count; j++)
                 {
                     pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Solid;
-                    gc.FillEllipse(brush, (float)org.Nodes[j].X - r / 2 + (float)offsetX,
-                        (float)org.Nodes[j].Y - r/2 + offsetY, r, r);
-                    gc.DrawString(org.Nodes[j].Id.ToString(),new Font("arial",10) , brush,
-                        (float)org.Nodes[j].X + (float)offsetX, (float)org.Nodes[j].Y + (float)offsetY);
+                    gc.FillEllipse(brush, (float)org.nodes[j].X - r / 2 + (float)offsetX,
+                        (float)org.nodes[j].Y - r/2 + offsetY, r, r);
+                    gc.DrawString(org.nodes[j].Id.ToString(),new Font("arial",10) , brush,
+                        (float)org.nodes[j].X + (float)offsetX, (float)org.nodes[j].Y + (float)offsetY);
 
                         //Utility.Distance(org.Nodes[j - 1].X, org.Nodes[j - 1].Y, org.Nodes[j].X,org.Nodes[j].Y) <= global.nodeMaxDist)
-                    foreach (Neighbor nb in new List<Neighbor>(org.Nodes[j].Neighbors.Values))
+                    foreach (Neighbor nb in new List<Neighbor>(org.nodes[j].Neighbors.Values))
                     {
                         Reader node = nb.node;
-                        gc.DrawLine(pen, (float)org.Nodes[j].X + offsetX,
-                            (float)org.Nodes[j].Y + offsetY,
+                        gc.DrawLine(pen, (float)org.nodes[j].X + offsetX,
+                            (float)org.nodes[j].Y + offsetY,
                             (float)node.X + offsetX, (float)node.Y + (float)offsetY);
                     }
                     pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dot;
-                    foreach (int o in org.Nodes[j].NearbyObjectCache.Keys)
+                    foreach (int o in org.nodes[j].NearbyObjectCache.Keys)
                     {
                         ObjectNode node = global.objects[o];
-                        gc.DrawLine(pen, (float)org.Nodes[j].X + (float)offsetX,
-                            (float)org.Nodes[j].Y + (float)offsetY,
+                        gc.DrawLine(pen, (float)org.nodes[j].X + (float)offsetX,
+                            (float)org.nodes[j].Y + (float)offsetY,
                             (float)node.X + (float)offsetX, (float)node.Y + (float)offsetY);
                     }
                 }
@@ -106,14 +106,14 @@ namespace AdHocBaseApp
             Global global = Global.getInstance();
             for (int i = 0; i < global.orgNum; i++)
             {
-                sb.AppendLine((global.orgs[i].Id + " " + global.orgs[i].Name + " " + global.orgs[i].Nodes.Count));
+                sb.AppendLine((global.orgs[i].Id + " " + global.orgs[i].Name + " " + global.orgs[i].nodes.Count));
                 Organization org = global.orgs[i];
-                for (int j = 0; j < org.Nodes.Count; j++)
+                for (int j = 0; j < org.nodes.Count; j++)
                 {
-                    sb.Append("\t" + org.Nodes[j].Id + ":" + org.Nodes[j].OrgId
-                        + " (" + org.Nodes[j].X + "," + org.Nodes[j].Y + ")");
+                    sb.Append("\t" + org.nodes[j].Id + ":" + org.nodes[j].OrgId
+                        + " (" + org.nodes[j].X + "," + org.nodes[j].Y + ")");
                     if (j > 0)
-                        sb.AppendLine("\t"+Utility.Distance(org.Nodes[j], org.Nodes[j - 1]).ToString());
+                        sb.AppendLine("\t"+Utility.Distance(org.nodes[j], org.nodes[j - 1]).ToString());
                     else
                         sb.AppendLine();
                 }

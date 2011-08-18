@@ -17,6 +17,7 @@ namespace HeterogeneousForward
         public int nodeNum = 0;
         public string filename = "";
         public bool clear = false;
+        public bool outputAsDefault = true;
 
         public bool ok = false;
         public MoveForm()
@@ -32,6 +33,7 @@ namespace HeterogeneousForward
             this.clear = this.chkClear.Checked;
             this.ok = true;
             this.filename = "events-r" + this.txtNodeRatio.Text + "-s" + this.txtNodeSpeed.Text + "-n" + nodeNum + ".txt";
+            this.outputAsDefault = this.checkOutputAsDefault.Checked;
             this.Hide();
         }
 

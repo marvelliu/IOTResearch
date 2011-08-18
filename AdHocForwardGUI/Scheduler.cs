@@ -86,6 +86,8 @@ namespace AdHocBaseApp
                 global.mainForm.Invalidate();
             }
 
+            Console.WriteLine("{0} [TOTAL_PKT] {1}", currentTime ,global.PacketSeq);
+
             quitDele q = global.mainForm.Quit;
             if (global.automatic)
             {

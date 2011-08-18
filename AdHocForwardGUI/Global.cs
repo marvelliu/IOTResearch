@@ -8,7 +8,9 @@ using System.Reflection;
 
 namespace AdHocBaseApp
 {
-    public enum RouteMethod{
+    public enum RouteMethod
+    {
+        SW_AODV,
         AODV,
         Adaptive,
         SmallWorld
@@ -92,10 +94,14 @@ namespace AdHocBaseApp
         public string eventsFileName = "events.txt";    
         public int TTL = 5;
 
-        //最多发送次数
+        //最多发送回数
         public int SendEventNum = 10;
-        public int SendEventMinTagNum = 1;
-        public int SendEventMaxTagNum = 5;
+        public int SendEventDuration = 1;//每回发送时间
+        public int SendEventInterval = 1;//每回中每次发送的间隔
+
+        //draw
+        public bool drawLine = false;
+
         //public SortedList<double, Event> events = new SortedList<double,Event>();
         public List<Event> events = new List<Event>();
 
