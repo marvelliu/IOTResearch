@@ -43,8 +43,6 @@ namespace TrustArch
             : base(id, org)
         {
             this.global = (IOTGlobal)Global.getInstance();
-            this.ReaderCache = new Dictionary<int, RSUEntity>();
-            this.wiredNodeCache = new List<int>();
             this.orgMonitorMapping = new Dictionary<int, List<int>>();
             this.cachedMonitorNodes = new Dictionary<int, HashSet<int>>();
             this.readerType = ReaderType.NORMAL;
@@ -67,8 +65,6 @@ namespace TrustArch
         private IOTPhenomemon bandwidthPhenomemon;
         private Dictionary<int, IOTPhenomemon> neighborSpeedPhenomemons;
 
-        private Dictionary<int, RSUEntity> ReaderCache;
-        private List<int> wiredNodeCache;
 
         //普通节点观察到的现象
         private HashSet<IOTPhenomemon> observedPhenomemons;

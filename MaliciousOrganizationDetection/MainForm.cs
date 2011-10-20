@@ -27,7 +27,6 @@ namespace MaliciousOrganizationDetection
             MODOrganization.GenerateNodePositionsAllRandom();
             MODEventManager handler = new MODEventManager();
             handler.LoadEvents(false);
-            //MODReader.AddDefaultForwardStrategy();
 
             global.mainForm = (MainForm)this;
             inited = true;

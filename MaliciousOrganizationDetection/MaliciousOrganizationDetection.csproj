@@ -46,6 +46,9 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="DSClass.cs" />
+    <Compile Include="MODEventTrust.cs" />
+    <Compile Include="MODPhenomemon.cs" />
     <Compile Include="MODEventGenerator.cs" />
     <Compile Include="MODEventManager.cs" />
     <Compile Include="MODScheduler.cs" />
