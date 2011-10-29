@@ -21,7 +21,7 @@ namespace HeterogeneousForward
                 uint tags = 0;
 
                 //这里需要找到与src同在一个机构的节点，tag一致
-                if (dst == Node.BroadcastNode)
+                if (dst == BroadcastNode.Node)
                 {
                     int orgId = ((Reader)src).OrgId;
                     Organization org = (Organization)Node.getNode(orgId, NodeType.ORG);

@@ -31,7 +31,7 @@ namespace TrustArch
             }
             else
             {
-                throw new Exception("Unknown event type: " + array[0]);
+                base.ParseEventArgs(array);
             }
         }
     }

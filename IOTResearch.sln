@@ -17,6 +17,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HeterogeneousForward", "Het
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MaliciousOrganizationDetection", "MaliciousOrganizationDetection\MaliciousOrganizationDetection.csproj", "{0A6C0524-9191-4830-9E3D-9AD0BE7141AF}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Test", "Test\Test.csproj", "{967B8A62-638D-429A-9C5F-E59692D00A7F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x86 = Debug|x86
@@ -55,6 +57,10 @@ Global
 		{0A6C0524-9191-4830-9E3D-9AD0BE7141AF}.Debug|x86.Build.0 = Debug|x86
 		{0A6C0524-9191-4830-9E3D-9AD0BE7141AF}.Release|x86.ActiveCfg = Release|x86
 		{0A6C0524-9191-4830-9E3D-9AD0BE7141AF}.Release|x86.Build.0 = Release|x86
+		{967B8A62-638D-429A-9C5F-E59692D00A7F}.Debug|x86.ActiveCfg = Debug|x86
+		{967B8A62-638D-429A-9C5F-E59692D00A7F}.Debug|x86.Build.0 = Debug|x86
+		{967B8A62-638D-429A-9C5F-E59692D00A7F}.Release|x86.ActiveCfg = Release|x86
+		{967B8A62-638D-429A-9C5F-E59692D00A7F}.Release|x86.Build.0 = Release|x86
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

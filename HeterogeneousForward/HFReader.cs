@@ -220,7 +220,7 @@ namespace HeterogeneousForward
             if (hops > 0)
             {
                 //Console.WriteLine("hops:{0}", hops);
-                SendAODVRequest(Node.BroadcastNode, src, dst, hops - 1, tags);
+                SendAODVRequest(BroadcastNode.Node, src, dst, hops - 1, tags);
                 AddPendingAODVRequest(src, node.Id, dst, true, tags);
             }
         }
@@ -319,7 +319,7 @@ namespace HeterogeneousForward
             //Not found...
 
             Console.WriteLine("{0:F4} [{1}] {2}{3} tries to send {4}{5} but no route", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.DstType, pkg.Dst);
-            SendAODVRequest(Node.BroadcastNode, this.Id, dst, pkg.TTL - 1, pkg.Tags);
+            SendAODVRequest(BroadcastNode.Node, this.Id, dst, pkg.TTL - 1, pkg.Tags);
             AddPendingAODVData(pkg);
         }
 
@@ -512,7 +512,7 @@ namespace HeterogeneousForward
             //这里如果为了增加成功率，可以设ttl为global.ttl，而非团内的半径
             pkg.TTL = global.innerSWTTL;
             //pkg.TTL = global.TTL;
-            SendAODVRequest(Node.BroadcastNode, this.Id, dst, pkg.TTL - 1, pkg.Tags);
+            SendAODVRequest(BroadcastNode.Node, this.Id, dst, pkg.TTL - 1, pkg.Tags);
             AddPendingAODVData(pkg);
         }
 
@@ -1758,7 +1758,7 @@ namespace HeterogeneousForward
                 global.currentSWHubNumber++;
             }
             if(this.isSwHub == true)
-                SendPingRequest(Node.BroadcastNode.Id);
+                SendPingRequest(BroadcastNode.Node.Id);
             Event.AddEvent(new Event(
                 scheduler.currentTime + global.checkSWHubCandidateInterval, EventType.CHK_SW_NB, this, null));
         }
@@ -1780,7 +1780,7 @@ namespace HeterogeneousForward
             else
                 Console.WriteLine("{0:F4} [{1}] {2}{3} sends to {4}{5}({6}->{7}->{8})", time, pkg.Type, this.type, this.Id, pkg.NextType, (pkg.Next == -1 ? "all" : pkg.Next.ToString()), pkg.Src, pkg.Prev, pkg.Dst);
 
-            if (pkg.Next == Node.BroadcastNode.Id) //Broadcast
+            if (pkg.Next == BroadcastNode.Node.Id) //Broadcast
             {
                 List<Reader> list = GetAllNearReaders(global.nodeMaxDist, true);
                 if (list.Count == 0)

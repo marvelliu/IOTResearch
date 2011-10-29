@@ -17,16 +17,27 @@ namespace MaliciousOrganizationDetection
         bool inited = false;
         int showed = 0;
 
+        float offsetX = 50;
+        float offsetY = 50;
+        float r = 7;
+
 
         void Init()
         {
-            //Console.Out.WriteLine("Program Starts...");
             Global global = Global.getInstance();
-            MODOrganization.GenerateNodes();
-            MODOrganization.GenerateOrganizations();
-            MODOrganization.GenerateNodePositionsAllRandom();
-            MODEventManager handler = new MODEventManager();
-            handler.LoadEvents(false);
+            //Console.Out.WriteLine("Program Starts...");
+            try
+            {
+                MODOrganization.GenerateNodes();
+                MODOrganization.GenerateOrganizations();
+                MODOrganization.GenerateNodePositionsAllRandom();
+                MODEventManager handler = new MODEventManager();
+                handler.LoadEvents(false);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
 
             global.mainForm = (MainForm)this;
             inited = true;
@@ -82,6 +93,52 @@ namespace MaliciousOrganizationDetection
 
         void DrawNodes(Graphics gc)
         {
+            Global global = Global.getInstance();
+            if (global.nodraw)
+                return;
+            if (inited == false)
+                return;
+            showed = 1;
+
+            if (global.orgNum <= 0 || global.readerNum <= 0)
+                return;
+
+            gc.Clear(Color.White);
+
+            Brush brush = new SolidBrush(Color.Black);
+            Pen pen = new Pen(brush);
+            gc.DrawLine(pen, 0 + offsetX, 0 + offsetY,
+                           (float)global.layoutX + offsetX, 0 + offsetY);
+            gc.DrawLine(pen, (float)global.layoutX + offsetX, 0 + offsetY,
+                           (float)global.layoutX + offsetX, (float)global.layoutY + offsetY);
+            gc.DrawLine(pen, (float)global.layoutX + offsetX, (float)global.layoutY + offsetY,
+                            0 + offsetX, (float)global.layoutY + offsetY);
+            gc.DrawLine(pen, 0 + offsetX, (float)global.layoutY + offsetY,
+                           0 + offsetX, 0 + offsetY);
+
+            for (int i = 0; i < global.readers.Length; i++)
+            {
+                MODReader reader = (MODReader)global.readers[i];
+                brush = new SolidBrush(Organization.colors[reader.OrgId]);                
+
+                gc.DrawString("R" + reader.Id.ToString(), new Font("arial", 10), brush,
+                    (float)reader.X + offsetX, (float)reader.Y + offsetY);
+                gc.FillEllipse(brush, (float)reader.X - r / 2 + offsetX,
+                    (float)reader.Y - r / 2 + offsetY, r, r);
+
+                lock (reader.Neighbors)
+                {
+                    pen = new Pen(brush);
+                    foreach (Neighbor nb in new List<Neighbor>(reader.Neighbors.Values))
+                    {
+                        Reader node = nb.node;
+                        gc.DrawLine(pen, (float)reader.X + offsetX,
+                            (float)reader.Y + offsetY,
+                            (float)node.X + offsetX, (float)node.Y + offsetY);
+                    }
+                }
+            }
+            showed = 0;
         }
 
         protected override void OnPaint(PaintEventArgs e)

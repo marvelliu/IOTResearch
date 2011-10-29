@@ -163,14 +163,14 @@ namespace AdHocBaseApp
                 readerNum = int.Parse(v[1]);
                 readers = new Reader[readerNum];
             }
-            else if (v[0] == "object_num")
+            else if (v[0] == "object_num" && objectNodeConstructor != null)
             {
                 objectNum = int.Parse(v[1]);
                 objects = new ObjectNode[objectNum];
                 for (int i = 0; i < objectNum; i++)
                     objects[i] = objectNodeConstructor(i);
             }
-            else if (v[0] == "querier_num")
+            else if (v[0] == "querier_num" && querierConstructor !=null)
             {
                 querierNum = int.Parse(v[1]);
                 queriers = new Querier[querierNum];

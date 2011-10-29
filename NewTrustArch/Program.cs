@@ -16,7 +16,8 @@ namespace NewTrustArch
         [STAThread]
         static void Main(string[] args)
         {
-            GlobalProducer.globalConstructor = IOTGlobal.getInstance;
+            GlobalProducer.globalConstructor = IOTGlobal.ProduceGlobal;
+            SchedulerProducer.schedulerlConstructor = IOTScheduler.ProduceScheduler;
             IOTGlobal global = (IOTGlobal)Global.getInstance();
 
             global.objectNodeConstructor = IOTObjectNode.ProduceObjectNode;

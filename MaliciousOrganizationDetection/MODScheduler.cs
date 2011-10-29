@@ -18,6 +18,18 @@ namespace MaliciousOrganizationDetection
             MODReader reader = (MODReader)node;
             switch (e.Type)
             {
+                case EventType.CHK_RT_TIMEOUT:
+                    reader.CheckRoutine();
+                    break;
+                case EventType.CHK_RECV_PKT:
+                    reader.CheckReceivedPacket((MODPhenomemon)e.Obj);
+                    break;
+                case EventType.DEDUCE_EVENT:
+                    reader.DeduceEventType((string)e.Obj);
+                    break;
+                case EventType.FWD_EVENT_REPORT:
+                    reader.ForwardEventReport((string)e.Obj);
+                    break;
                 default:
                     base.ProcessEvent(node, e);
                     break;

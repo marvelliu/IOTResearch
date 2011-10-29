@@ -6,6 +6,11 @@ using AdHocBaseApp;
 
 namespace MaliciousOrganizationDetection
 {
+    public enum DeduceMethod
+    {
+        Native = 0,
+        Game,
+    }
     public class MODGlobal:Global
     {
         public new MainForm mainForm = null;
@@ -19,6 +24,7 @@ namespace MaliciousOrganizationDetection
 
         public float checkEventTimeout = 4;
         public float checkPhenomemonTimeout = 2;
+        public float checkReceivedPacketTimeout = 2;
         public float checkNodeTimeout = 8;
         public float checkNodeTypeTimeout = 16;
 
@@ -28,6 +34,39 @@ namespace MaliciousOrganizationDetection
 
         public double NormalBelief = 0.3;
         public double NormalPlausibility = 0.7;
+
+        //public DeduceMethod deduceMethod = DeduceMethod.Native;
+        public DeduceMethod deduceMethod = DeduceMethod.Game;
+
+
+        //对于恶意的报告节点所得
+        public double uA1MaliciousAndSupportAndAccept = -1f;
+        public double uA1MaliciousAndSupportAndReject = 0.5f;
+        public double uA1MaliciousAndNonsupportAndAccept = -0.5f;
+        public double uA1MaliciousAndNonsupportAndReject = 0.5f;
+
+
+        //对于检测节点所得
+        public double uA2NormalAndSupportAndAccept = 1f;
+        public double uA2NormalAndSupportAndReject = 0.3f;
+        public double uA2NormalAndNonsupportAndAccept = 0.5f;
+        public double uA2NormalAndNonsupportAndReject = 0.2f;
+        public double uA2MaliciousAndSupportAndAccept = -1f;
+        public double uA2MaliciousAndSupportAndReject = 0.5f;
+        public double uA2MaliciousAndNonsupportAndAccept = -0.5f;
+        public double uA2MaliciousAndNonsupportAndReject = 0.5f;
+
+        public int BufSize = 2048;
+
+
+        public double pInitNormal = 0.5f;
+        public double pInitSupportByNormal = 0.2f;
+        public double pInitNonsupportByNormal = 0.8f;
+        public double pInitSupportByMalicious = 0.8f;
+        public double pInitNonsupportByMalicious = 0.2f;
+
+        public double PunishmentFactor = 0.8f;
+        public double RewardFactor = 1.0f;
 
 
         new public static MODGlobal ProduceGlobal()

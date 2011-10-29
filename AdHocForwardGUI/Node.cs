@@ -6,6 +6,10 @@ using System.Diagnostics;
 
 namespace AdHocBaseApp
 {
+    public class BroadcastNode
+    {
+        public static Node Node = new Node(-1, NodeType.READER); 
+    }
     public class Node
     {
         public NodeType type;
@@ -27,9 +31,7 @@ namespace AdHocBaseApp
             this.packetSeq = 0;
             this.global = Global.getInstance();
         }
-
-        public static Node BroadcastNode = new Node(-1, NodeType.READER);
-
+                
         public static Node getNode(int n, NodeType type)
         {
             Global global = Global.getInstance();
@@ -41,10 +43,10 @@ namespace AdHocBaseApp
                     Console.WriteLine("Warning: parse READER{0} bigger than readerNum({1})", n, global.readerNum);
                     node = null;
                 }
-                else if (n < Reader.BroadcastNode.Id)
+                else if (n < BroadcastNode.Node.Id)
                     node = null;
-                else if (n == Reader.BroadcastNode.Id)
-                    node = Reader.BroadcastNode;
+                else if (n == BroadcastNode.Node.Id)
+                    node = BroadcastNode.Node;
                 else
                     node = global.readers[n];
             }

@@ -113,7 +113,7 @@ namespace TrustArch
                 AddReceiveObjectPhenomemon(pkg);
             //TODO: Other type
 
-            if ((pkg.Next != Id && pkg.Next != Node.BroadcastNode.Id) || pkg.NextType != NodeType.READER)
+            if ((pkg.Next != Id && pkg.Next != BroadcastNode.Node.Id) || pkg.NextType != NodeType.READER)
             {
                 if (pkg.PrevType == NodeType.READER)
                     CheckPacketCount(pkg);
@@ -383,7 +383,7 @@ namespace TrustArch
             int monitorOrg = pkg.SetMonitorResponse.monitorOrg;
             int monitorNetwork = pkg.SetMonitorResponse.monitorNetwork;
             //机构发向某节点的setmonitor
-            if (pkg.Dst != Node.BroadcastNode.Id)
+            if (pkg.Dst != BroadcastNode.Node.Id)
             {
                 if (pkg.Dst == Id) // i am dst
                 {
@@ -398,7 +398,7 @@ namespace TrustArch
                         this.assignedMonitorOrgs.Add(pkg.Src);
                     else
                         return;
-                    Packet pkg1 = new Packet(this, Node.BroadcastNode, PacketType.SET_MONITOR);
+                    Packet pkg1 = new Packet(this, BroadcastNode.Node, PacketType.SET_MONITOR);
                     pkg1.SetMonitorResponse = new SetMonitorResponseField(monitorNode, monitorOrg, monitorNetwork);
                     SendPacketDirectly(scheduler.currentTime, pkg1);
                     return;
@@ -415,7 +415,7 @@ namespace TrustArch
                     if (!this.orgMonitorMapping.ContainsKey(monitorOrg))
                         this.orgMonitorMapping.Add(monitorOrg, new List<int>());
                     this.orgMonitorMapping[monitorOrg].Add(monitorNode);
-                    Packet pkg1 = new Packet(this, Node.BroadcastNode, PacketType.SET_MONITOR);
+                    Packet pkg1 = new Packet(this, BroadcastNode.Node, PacketType.SET_MONITOR);
                     pkg1.SetMonitorResponse = new SetMonitorResponseField(monitorNode, monitorOrg, monitorNetwork);
                     SendPacketDirectly(scheduler.currentTime, pkg1);
                     return;
@@ -458,11 +458,11 @@ namespace TrustArch
             IOTPhenomemon p;
             this.totalReceivedPackets++;
             //忽略广播包(从实际来看，发送广播包的一般是节点本身的行为，不需要考虑其对数据包的恶意操作)
-            if (pkg.Next == Node.BroadcastNode.Id)
+            if (pkg.Next == BroadcastNode.Node.Id)
                 return;
 
             //记录发送现象
-            if (pkg.Next != Node.BroadcastNode.Id)
+            if (pkg.Next != BroadcastNode.Node.Id)
             {
                 p = new IOTPhenomemon(IOTPhenomemonType.SEND_PACKET, pkg.Prev, scheduler.currentTime, pkg);
                 p.likehood = global.sendLikehood;
@@ -491,11 +491,11 @@ namespace TrustArch
             IOTPhenomemon p;
             this.totalReceivedPackets++;
             //忽略广播包(从实际来看，发送广播包的一般是节点本身的行为，不需要考虑其对数据包的恶意操作)
-            if (pkg.Next == Node.BroadcastNode.Id)
+            if (pkg.Next == BroadcastNode.Node.Id)
                 return;
 
             //记录发送现象
-            if (pkg.Next != Node.BroadcastNode.Id)
+            if (pkg.Next != BroadcastNode.Node.Id)
             {
                 p = new IOTPhenomemon(IOTPhenomemonType.SEND_PACKET, pkg.Prev, scheduler.currentTime, pkg);
                 p.likehood = global.sendLikehood;

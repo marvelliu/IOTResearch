@@ -379,7 +379,7 @@ namespace LocationPrivacy
         /*
         public void SendLongNativeGroupRequest(int h0, int h, int k, int origId)
         {
-            Packet pkg = new Packet(this, Node.BroadcastNode, PacketType.NATIVE_LONG_GROUP_REQUEST);
+            Packet pkg = new Packet(this, BroadcastNode.Node, PacketType.NATIVE_LONG_GROUP_REQUEST);
             pkg.Data = new NativeGroupRequestField(origId, k, h, h0);
             SendPacketDirectly(scheduler.CurrentTime, pkg);
         }*/
@@ -396,7 +396,7 @@ namespace LocationPrivacy
 
         public void RecvSetLongNativeGroupRequest(Packet pkg)
         {
-            if (this.Id != pkg.Dst && pkg.Dst != Node.BroadcastNode.Id)
+            if (this.Id != pkg.Dst && pkg.Dst != BroadcastNode.Node.Id)
             {
                 this.retryOnSendingFailture = true;
                 RoutePacket(pkg);
@@ -423,7 +423,7 @@ namespace LocationPrivacy
         
         public void RecvSetLongNativeGroupResponse(Packet pkg)
         {
-            if (this.Id != pkg.Dst && pkg.Dst != Node.BroadcastNode.Id)
+            if (this.Id != pkg.Dst && pkg.Dst != BroadcastNode.Node.Id)
             {
                 this.retryOnSendingFailture = true;
                 RoutePacket(pkg);
@@ -506,14 +506,14 @@ namespace LocationPrivacy
 
         public void SendNativeGroupRequest(int h0, int h, int k, int origId)
         {
-            Packet pkg = new Packet(this, Node.BroadcastNode, PacketType.NATIVE_GROUP_REQUEST);
+            Packet pkg = new Packet(this, BroadcastNode.Node, PacketType.NATIVE_GROUP_REQUEST);
             pkg.Data = new NativeGroupRequestField(origId, k, h, h0);
             SendPacketDirectly(scheduler.currentTime, pkg);
         }
 
         public void RecvNativeGroupRequest(Packet pkg)
         {
-            if (this.Id != pkg.Dst && pkg.Dst!= Node.BroadcastNode.Id)
+            if (this.Id != pkg.Dst && pkg.Dst!= BroadcastNode.Node.Id)
             {
                 this.retryOnSendingFailture = true;
                 RoutePacket(pkg);
@@ -592,7 +592,7 @@ namespace LocationPrivacy
 
             //PrintNativeTempGroup();
 
-            if (this.Id != pkg.Dst && pkg.Dst != Node.BroadcastNode.Id)
+            if (this.Id != pkg.Dst && pkg.Dst != BroadcastNode.Node.Id)
             {
                 this.retryOnSendingFailture = true;
                 RoutePacket(pkg);
@@ -1193,7 +1193,7 @@ namespace LocationPrivacy
         //建立匿名树
         public void SendTreeGroupRequest(int rootId, int m, double L, double l, double preAngle, int hops)
         {
-            SendTreeGroupRequest(rootId, m, Node.BroadcastNode.Id,  L, l, preAngle, hops);
+            SendTreeGroupRequest(rootId, m, BroadcastNode.Node.Id,  L, l, preAngle, hops);
         }
         public void SendTreeGroupRequest(int rootId, int m, int dst, double L, double l, double preAngle, int hops)
         {
@@ -2028,7 +2028,7 @@ namespace LocationPrivacy
                 {
                     update = true;
                     Console.WriteLine("READER{0} loses READER{1}", this.id, parent.Id);
-                    parent = Reader.BroadcastNode;
+                    parent = BroadcastNode.Node;
                 }
                 else if (scheduler.CurrentTime - subTreeInfo.parentconfirmed > 5) //有点久了，ping一下
                 {

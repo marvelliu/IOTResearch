@@ -1,8 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Collections;
 using AdHocBaseApp;
 
 
@@ -35,7 +32,24 @@ namespace MaliciousOrganizationDetection
         END
     }
 
-    
+
+    public enum GroupType
+    {
+        Normal = 0,
+        Malicious,
+    }
+
+    public enum ReportSupportGroupType
+    {
+        Support = 0,
+        Nonsupport,
+    }
+
+    public enum ActionToReport
+    {
+        Accept = 0,
+        Reject,
+    }
 
     [Serializable]
     public class MODEventTrustResult
@@ -45,15 +59,15 @@ namespace MaliciousOrganizationDetection
         public string eventIdent;
         public DSClass ds;
         public int app;
-        public MODEventCategoryType category;
         public int totalEventCount;
         public int nodeReportCount;
+        public int normal = 1; //总体判断，如果小于0表示异常
 
         public static int Conv(MODEventType type)
         {
             int t = (int)type;
             //....
-            if(t>(int)MODDropPacketEventType.NotDropPacket)
+            if (t > (int)MODDropPacketEventType.NotDropPacket)
                 return t - (int)MODDropPacketEventType.NotDropPacket;
             return -1;
         }
@@ -67,7 +81,7 @@ namespace MaliciousOrganizationDetection
                 //TODO others
                 default:
                     return -1;
-                    
+
             }
         }
 
@@ -103,15 +117,15 @@ namespace MaliciousOrganizationDetection
             this.node = node;
             this.reportNode = reportNode;
             this.ds = ds;
-            this.category = category;
-            this.eventIdent = pkgIdent+"-"+category;
+            this.eventIdent = pkgIdent;
             //TODO app
 
             confirmBeliefThrehold = new Dictionary<MODEventType, double>();
             confirmBeliefThrehold[MODEventType.DropPacketMaliciously] = 0.3;
         }
-    }
 
+        public static HashSet<string> DeducedPackets = new HashSet<string>();
+    }
 
     [Serializable]
     class MODEventTrustCategoryResult
@@ -139,12 +153,12 @@ namespace MaliciousOrganizationDetection
     class MODEventTrust
     {
         static double[] CF = new double[(int)MODEventType.COUNT]{
-                0.9, //NotDropPacket
-                0.5, //NotDropPacketButNotReceivePacket,
-                0.7, //DropPacketDueToBandwith,
-                0.7, //DropPacketMaliciously,
+                            0.9, //NotDropPacket
+                            0.5, //NotDropPacketButNotReceivePacket,
+                            0.7, //DropPacketDueToBandwith,
+                            0.7, //DropPacketMaliciously,
         
-        };
+                        };
 
         static MODGlobal global = (MODGlobal)Global.getInstance();
 
@@ -177,9 +191,147 @@ namespace MaliciousOrganizationDetection
             return likehood;
         }
 
+        public static MODPhenomemon GetPhenomemon(Packet pkg, int selfId, HashSet<MODPhenomemon> observedPhenomemons)
+        {
+            MODGlobal global = (MODGlobal)Global.getInstance();
+            //每个节点处理该类事件的次数
+            int[] eventCount = new int[global.readerNum];
+            List<MODEventTrustResult> list = new List<MODEventTrustResult>();
+            foreach (MODPhenomemon p in observedPhenomemons)
+            {
+                if (p.pkg != pkg)
+                    continue;
+                else if (p.likehood <= global.SmallValue)
+                    continue;
+                if (p.type != MODPhenomemonType.RECV_PACKET)
+                    continue;
+                else if (p.pkg.Dst == p.nodeId)
+                    continue;
+                else if (p.pkg.Type != PacketType.DATA && p.pkg.Type != PacketType.COMMAND)
+                    continue;
+                return p;
+            }
+            return null;
+        }
+
+
+        public static MODPhenomemon GetPhenomemon(string pkgIdent, int selfId, HashSet<MODPhenomemon> observedPhenomemons)
+        {
+
+            MODGlobal global = (MODGlobal)Global.getInstance();
+            //每个节点处理该类事件的次数
+            int[] eventCount = new int[global.readerNum];
+            List<MODEventTrustResult> list = new List<MODEventTrustResult>();
+            foreach (MODPhenomemon p in observedPhenomemons)
+            {
+                if (p.type != MODPhenomemonType.RECV_PACKET)
+                    continue;
+                string pkgIdent1 = GetPacketIdent(p.pkg);
+
+                if (pkgIdent != pkgIdent1)
+                    continue;
+                else if (p.likehood <= global.SmallValue)
+                    continue;
+                if (p.type != MODPhenomemonType.RECV_PACKET)
+                    continue;
+                else if (p.pkg.Dst == p.nodeId)
+                    continue;
+                else if (p.pkg.Type != PacketType.DATA && p.pkg.Type != PacketType.COMMAND)
+                    continue;
+                return p;
+            }
+            return null;
+        }
+
+
+        public static MODEventTrustResult DeduceDropPacketMaliciouslyByPacket(int selfId, HashSet<MODPhenomemon> observedPhenomemons, double currentTime, MODPhenomemon p)
+        {
+            double a1, a2, a3, a4, a5, a6, a7, a19, a27;
+            if (Global.getInstance().debug)
+                Console.WriteLine("READER{0} Check DeduceDropPacketMaliciously", selfId);
+            MODGlobal global = (MODGlobal)Global.getInstance();
+            MODReader selfNode = (MODReader)global.readers[selfId];
+
+            int node = p.nodeId;
+
+            a1 = p.likehood; //likehood of receiving a packet at time p.start
+            a2 = ConditionHappened(observedPhenomemons, MODPhenomemonType.SEND_PACKET, node, p.start, p.start + global.sendPacketTimeout, p.pkg);
+            a3 = ConditionHappened(observedPhenomemons, MODPhenomemonType.NOT_SEND_PACKET, node, p.start, Scheduler.getInstance().currentTime, p.pkg);
+            a4 = ConditionHappened(observedPhenomemons, MODPhenomemonType.BANDWIDTH_BUSY, selfId, p.start - global.checkPhenomemonTimeout, Scheduler.getInstance().currentTime);
+            //如果对带宽占用没有知识，则正反都设置为未知。
+            a5 = 0.9 - a4;
+            a6 = Utility.Max(new double[]{
+                    ConditionHappened(observedPhenomemons, MODPhenomemonType.MOVE_FAST, node, p.start - global.checkPhenomemonTimeout, Scheduler.getInstance().currentTime),
+                    ConditionHappened(observedPhenomemons, MODPhenomemonType.MOVE_FAST, p.pkg.Prev, p.start - global.checkPhenomemonTimeout, Scheduler.getInstance().currentTime),
+                    ConditionHappened(observedPhenomemons, MODPhenomemonType.MOVE_FAST, selfId, p.start - global.checkPhenomemonTimeout, Scheduler.getInstance().currentTime)
+                });
+            a7 = 0.9 - a6;
+            //一个是观测节点和被观测节点的距离，看是否后者发送的消息能否被前者收到
+            //另一个是，看源节点发送的数据是否能被被观测节点收到
+            //a19 = Math.Max(FarDistanceLikehood(selfId, node, p.pkg.DstType==NodeType.OBJECT),
+            //    FarDistanceLikehood(selfId, p.pkg.Prev, p.pkg.PrevType == NodeType.OBJECT));
+            if (p.pkg.DstType == NodeType.OBJECT && selfNode.NearbyObjectCache.ContainsKey(p.pkg.Dst))
+                a19 = FarDistanceLikehood(selfId, node, false);
+            else
+                a19 = FarDistanceLikehood(selfId, node, true);
+            a27 = 0.9 - a19;
+
+
+            //A1 AND A2 AND A7 AND A11 -> B1 
+            double b0 = DSClass.AND(a1, a2) * CF[(int)MODEventType.NotDropPacket];
+            //A1 AND A2 AND A7 AND A11 -> B1
+            double b1 = DSClass.AND(DSClass.AND(a1, a3), DSClass.OR(DSClass.OR(a4, a6), a19)) * CF[(int)MODEventType.NotDropPacketButNotReceivePacket];
+            //A1 AND A2 AND A7 AND A11 -> B1
+            double b2 = DSClass.AND(DSClass.AND(a1, a3), a4) * CF[(int)MODEventType.DropPacketDueToBandwith];
+            //A1 AND A2 AND A7 AND A11 -> B1
+            double b3 = DSClass.AND(DSClass.AND(DSClass.AND(DSClass.AND(a1, a3), a5), a7), a27) * CF[(int)MODEventType.DropPacketMaliciously];
+
+            if (global.debug)
+            {
+                Console.WriteLine("{0}->{1}:{2}", selfId, node, p.pkg.SrcSenderSeq);
+                Console.WriteLine("a1:" + a1);
+                Console.WriteLine("a2:" + a2);
+                Console.WriteLine("a3:" + a3);
+                Console.WriteLine("a4:" + a4);
+                Console.WriteLine("a5:" + a5);
+                Console.WriteLine("a6:" + a6);
+                Console.WriteLine("a7:" + a7);
+                Console.WriteLine("a19:" + a19);
+                Console.WriteLine("a27:" + a27);
+                Console.WriteLine("b0:" + b0);
+                Console.WriteLine("b1:" + b1);
+                Console.WriteLine("b2:" + b2);
+                Console.WriteLine("b3:" + b3);
+            }
+
+            DSClass ds = new DSClass(pow(MODDropPacketEventType.END));
+            ds.SetM(pow(MODDropPacketEventType.NotDropPacket), b0);
+            ds.SetM(pow(MODDropPacketEventType.NotDropPacketButNotReceivePacket), b1);
+            ds.SetM(pow(MODDropPacketEventType.DropPacketDueToBandwith), b2);
+            ds.SetM(pow(MODDropPacketEventType.DropPacketMaliciously), b3);
+            ds.SetM(pow(MODDropPacketEventType.END) - 1, 1 - b0 - b1 - b2 - b3);
+            ds.Cal();
+            //ds.Output();
+            string pkgIdent = GetPacketIdent(p.pkg);
+            MODEventTrustResult r = new MODEventTrustResult(node, selfId, pkgIdent, MODEventCategoryType.DropPacket, ds);
+
+            //此处，我们先过滤一些正常事件，否则事件太多了
+            if (ds.b[pow(MODEventType.NotDropPacket) + pow(MODEventType.NotDropPacketButNotReceivePacket)] < global.NormalBelief
+                && ds.p[pow(MODEventType.NotDropPacket) + pow(MODEventType.NotDropPacketButNotReceivePacket)] < global.NormalPlausibility)//确实是攻击,恶意事件的信念大于正常事件，或恶意事件的信念大于某一个阈值
+            {
+                Console.WriteLine("{0:F4} reader{1} think reader{2} is not normal.", currentTime, selfId, p.nodeId);
+                r.normal = -1;
+                if (global.debug)
+                {
+                    r.ds.Output();
+                }
+            }
+            return r;
+        }
+
         static List<MODEventTrustResult> DeduceDropPacketMaliciously(int selfId, HashSet<MODPhenomemon> observedPhenomemons, double currentTime)
         {
-            if(Global.getInstance().debug)
+            if (Global.getInstance().debug)
                 Console.WriteLine("READER{0} Check DeduceDropPacketMaliciously", selfId);
             MODGlobal global = (MODGlobal)Global.getInstance();
             MODReader selfNode = (MODReader)global.readers[selfId];
@@ -224,7 +376,7 @@ namespace MaliciousOrganizationDetection
                 //另一个是，看源节点发送的数据是否能被被观测节点收到
                 //a19 = Math.Max(FarDistanceLikehood(selfId, node, p.pkg.DstType==NodeType.OBJECT),
                 //    FarDistanceLikehood(selfId, p.pkg.Prev, p.pkg.PrevType == NodeType.OBJECT));
-                if(p.pkg.DstType == NodeType.OBJECT && selfNode.NearbyObjectCache.ContainsKey(p.pkg.Dst))
+                if (p.pkg.DstType == NodeType.OBJECT && selfNode.NearbyObjectCache.ContainsKey(p.pkg.Dst))
                     a19 = FarDistanceLikehood(selfId, node, false);
                 else
                     a19 = FarDistanceLikehood(selfId, node, true);
@@ -270,7 +422,7 @@ namespace MaliciousOrganizationDetection
                 if (ds.b[pow(MODEventType.NotDropPacket) + pow(MODEventType.NotDropPacketButNotReceivePacket)] < global.NormalBelief
                     && ds.p[pow(MODEventType.NotDropPacket) + pow(MODEventType.NotDropPacketButNotReceivePacket)] < global.NormalPlausibility)//确实是攻击,恶意事件的信念大于正常事件，或恶意事件的信念大于某一个阈值
                 {
-                    string pkgIdent = p.pkg.Prev + "->" + p.pkg.Next + "[" + p.pkg.PrevSenderSeq + "]";
+                    string pkgIdent = GetPacketIdent(p.pkg);
                     MODEventTrustResult r = new MODEventTrustResult(node, selfId, pkgIdent, MODEventCategoryType.DropPacket, ds);
                     r.totalEventCount = eventCount[node];
                     r.app = p.pkg.AppId;
@@ -379,7 +531,7 @@ namespace MaliciousOrganizationDetection
                     list.Add(p);
                     likehood = Math.Max(p.likehood, likehood);
                 }
-            }                
+            }
             return likehood;
         }
 
@@ -420,12 +572,52 @@ namespace MaliciousOrganizationDetection
 
             return likehood;
         }
-        
-        
+
+
+        public static MODEventTrustResult NotObservedEventTrustResult(int node, int reportNode, string pkgIdent, MODEventCategoryType category)
+        {
+            double b0 = 0.4;
+            double b1 = 0.2;
+            double b2 = 0.2;
+            double b3 = 0.2;
+
+            DSClass ds = new DSClass(pow(MODDropPacketEventType.END));
+            ds.SetM(pow(MODDropPacketEventType.NotDropPacket), b0);
+            ds.SetM(pow(MODDropPacketEventType.NotDropPacketButNotReceivePacket), b1);
+            ds.SetM(pow(MODDropPacketEventType.DropPacketDueToBandwith), b2);
+            ds.SetM(pow(MODDropPacketEventType.DropPacketMaliciously), b3);
+            ds.SetM(pow(MODDropPacketEventType.END) - 1, 1 - b0 - b1 - b2 - b3);
+            ds.Cal();
+
+            MODEventTrustResult result = new MODEventTrustResult(node, reportNode, pkgIdent, category, ds);
+            result.normal = 1;
+            return result;
+        }
+
+
+        public static MODEventTrustResult ForgeMaliciousEventTrustResult(int node, int reportNode, string pkgIdent, MODEventCategoryType category)
+        {
+            double b0 = 0.1;
+            double b1 = 0.1;
+            double b2 = 0.1;
+            double b3 = 0.7;
+
+            DSClass ds = new DSClass(pow(MODDropPacketEventType.END));
+            ds.SetM(pow(MODDropPacketEventType.NotDropPacket), b0);
+            ds.SetM(pow(MODDropPacketEventType.NotDropPacketButNotReceivePacket), b1);
+            ds.SetM(pow(MODDropPacketEventType.DropPacketDueToBandwith), b2);
+            ds.SetM(pow(MODDropPacketEventType.DropPacketMaliciously), b3);
+            ds.SetM(pow(MODDropPacketEventType.END) - 1, 1 - b0 - b1 - b2 - b3);
+            ds.Cal();
+
+            MODEventTrustResult result = new MODEventTrustResult(node, reportNode, pkgIdent, category, ds);
+            result.normal = -1;
+            return result;
+        }
 
         static int pow(MODDropPacketEventType t)
         {
-            return DSClass.pow((int)t- (int)MODDropPacketEventType.NotDropPacket);
+            return DSClass.pow((int)t - (int)MODDropPacketEventType.NotDropPacket);
         }
 
         public static int pow(MODEventType type)
@@ -441,6 +633,12 @@ namespace MaliciousOrganizationDetection
                 return 0.9 - v;
         }
 
+        public static string GetPacketIdent(Packet pkg)
+        {
+            return pkg.Prev + "->" + pkg.Next + "[" + pkg.PrevSenderSeq + "]";
+        }
+
 
     }
 }
+

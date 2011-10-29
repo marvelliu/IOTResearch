@@ -158,7 +158,7 @@ namespace AdHocBaseApp
             //decrease the packet counter
             if (pkg.PrevType == NodeType.READER)
             {
-                if (pkg.Next == Node.BroadcastNode.Id)
+                if (pkg.Next == BroadcastNode.Node.Id)
                 {
                     if (pkg.DelPacketNode == Id)
                     {
@@ -209,7 +209,7 @@ namespace AdHocBaseApp
             else
                 Console.WriteLine("{0:F4} [{1}] {2}{3} sends to {4}{5}({6}->{7})", time, pkg.Type, this.type, this.Id, pkg.NextType, (pkg.Next == -1 ? "all" : pkg.Next.ToString()), pkg.Src, pkg.Dst);
 
-            if (pkg.Next == Node.BroadcastNode.Id) //Broadcast
+            if (pkg.Next == BroadcastNode.Node.Id) //Broadcast
             {
                 List<Reader> list = GetAllNearReaders(global.nodeMaxDist, true);
                 if (list.Count == 0)
@@ -371,7 +371,7 @@ namespace AdHocBaseApp
             float nextBeacon = 0;
             if (scheduler.currentTime < global.beaconWarming)
                 nextBeacon = (float)(Utility.P_Rand(10 * (global.beaconWarmingInterval + 0.4)) / 10);//0.5是为了设定最小值
-            else if (this.Speed[0] > 1f) //当节点运动时，beacon应频繁些
+            else if (this.Speed!=null && this.Speed[0] > 1f) //当节点运动时，beacon应频繁些
                 nextBeacon = (float)(Utility.P_Rand(4 * global.beaconInterval) / 4);
             else
                 nextBeacon = (float)(Utility.P_Rand(10 * global.beaconInterval) / 10);
@@ -410,6 +410,8 @@ namespace AdHocBaseApp
             if (nb != null)
             {
                 nb.lastBeacon = scheduler.currentTime;
+                if (nb.firstBeacon < 0)
+                    nb.firstBeacon = scheduler.currentTime;
             }
             else
             {
@@ -486,6 +488,7 @@ namespace AdHocBaseApp
                 routeTable.Remove(t);
                 //Console.WriteLine("Node " + id + " remove neighbor " + t);
             }
+            Event.AddEvent(new Event(scheduler.currentTime + global.checkNeighborInterval, EventType.CHK_NB, this, null));
         }
 
         public virtual void CheckNearObjects()
@@ -514,7 +517,7 @@ namespace AdHocBaseApp
 
             string pkgId = pkg.getId();
             if (global.debug)
-                Console.WriteLine("pkgId:{0}", pkgId);
+                Console.WriteLine("[Debug] pkgId:{0}", pkgId);
             if (!this.receivedPackets.Contains(pkgId))
                 this.receivedPackets.Add(pkgId);
             else
@@ -656,7 +659,7 @@ namespace AdHocBaseApp
             }*/
 
             Console.WriteLine("{0:F4} [{1}] {2}{3} tries to send {4}{5} but no route", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.DstType, pkg.Dst);
-            SendAODVRequest(Node.BroadcastNode, this.Id, dst, pkg.TTL - 1);
+            SendAODVRequest(BroadcastNode.Node, this.Id, dst, pkg.TTL - 1);
             AddPendingAODVData(pkg);
         }
 
@@ -747,11 +750,11 @@ namespace AdHocBaseApp
                 SendAODVRequest(this.Neighbors[nbId].node, dst, pkg.Tags);
             }
              */
-            //SendAODVRequest(Node.BroadcastNode, dst, pkg.Tags);
+            //SendAODVRequest(BroadcastNode.Node, dst, pkg.Tags);
             if (hops > 0)
             {
                 //Console.WriteLine("hops:{0}", hops);
-                SendAODVRequest(Node.BroadcastNode, src, dst, hops - 1);
+                SendAODVRequest(BroadcastNode.Node, src, dst, hops - 1);
                 AddPendingAODVRequest(src, node.Id, dst, true);
             }
         }
@@ -1006,10 +1009,10 @@ namespace AdHocBaseApp
                 Console.WriteLine("Warning: parse READER{0} bigger than readerNum({1})", n, global.readerNum);
                 node = null;
             }
-            else if (n < Reader.BroadcastNode.Id)
+            else if (n < BroadcastNode.Node.Id)
                 node = null;
-            else if (n == Reader.BroadcastNode.Id)
-                node = (Reader)Reader.BroadcastNode;
+            else if (n == BroadcastNode.Node.Id)
+                node = (Reader)BroadcastNode.Node;
             else
                 node = global.readers[n];
 
@@ -1038,7 +1041,7 @@ namespace AdHocBaseApp
                 }*/
             }
 
-            if ((pkg.Next != Id && pkg.Next != Node.BroadcastNode.Id) || pkg.NextType != NodeType.READER)
+            if ((pkg.Next != Id && pkg.Next != BroadcastNode.Node.Id) || pkg.NextType != NodeType.READER)
             {
                 return;
             }

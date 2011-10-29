@@ -109,7 +109,10 @@ namespace AdHocBaseApp
                     ((Reader)node).SendBeacon(currentTime);
                     break;
                 case EventType.SND_DATA:
-                    node.SendData((Packet)e.Obj);
+                    Packet pkg = (Packet)e.Obj;
+                    if (pkg.SrcSenderSeq < 0)//未定该数据包的id
+                        ((Reader)node).initPacketSeq(pkg);
+                    node.SendData(pkg);
                     break;
                 case EventType.CHK_NB:
                     ((Reader)node).CheckNeighbors();
@@ -124,7 +127,7 @@ namespace AdHocBaseApp
                     ((Querier)node).SendQueryRequest((int)e.Obj);
                     break;
                 default:
-                    throw new Exception("Unknown event type: " + e.Type);                    
+                    throw new Exception("Unknown event type: " + e.Type);
             }
         }
 

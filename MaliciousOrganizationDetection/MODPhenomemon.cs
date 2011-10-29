@@ -6,7 +6,7 @@ using AdHocBaseApp;
 
 namespace MaliciousOrganizationDetection
 {
-    enum MODPhenomemonType
+    public enum MODPhenomemonType
     {
         RECV_PACKET,
         NOT_SEND_PACKET,
@@ -20,7 +20,7 @@ namespace MaliciousOrganizationDetection
         DIST_FAR,
     }
 
-    class MODPhenomemon
+    public class MODPhenomemon
     {
         public MODPhenomemonType type;
         public int nodeId;

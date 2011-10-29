@@ -49,7 +49,7 @@ namespace HeterogeneousForward
                     float interval = float.Parse(array[5]); ;
 
                     //这里需要找到与src同在一个机构的节点，tag一致
-                    if (dnode == Node.BroadcastNode)
+                    if (dnode == BroadcastNode.Node)
                     {
                         int orgId = ((Reader)snode).OrgId;
                         Organization org = (Organization)Node.getNode(orgId, NodeType.ORG);

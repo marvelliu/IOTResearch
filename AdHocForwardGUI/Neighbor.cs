@@ -9,11 +9,13 @@ namespace AdHocBaseApp
     {
         public Reader node;
         public float lastBeacon;
+        public float firstBeacon;
 
         public Neighbor(Reader node)
         {
             this.node = node;
             lastBeacon = -1;
+            firstBeacon = -1;
         }
     }
 }

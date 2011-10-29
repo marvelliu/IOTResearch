@@ -22,15 +22,22 @@ namespace TrustArch
 
         void Init()
         {
-            //Console.Out.WriteLine("Program Starts...");
             IOTGlobal global = (IOTGlobal)Global.getInstance();
-            IOTOrganization.GenerateNodes();
-            IOTOrganization.GenerateOrganizations();
-            IOTOrganization.GenerateNodePositionsAllRandom();
-            global.trustManager = global.trustManagerConstructor();
-            IOTEventManager handler = new IOTEventManager();
-            handler.LoadEvents(false);
-            IOTReader.SetReaderTypes();
+            //Console.Out.WriteLine("Program Starts...");
+            try
+            {
+                IOTOrganization.GenerateNodes();
+                IOTOrganization.GenerateOrganizations();
+                IOTOrganization.GenerateNodePositionsAllRandom();
+                global.trustManager = global.trustManagerConstructor();
+                IOTEventManager handler = new IOTEventManager();
+                handler.LoadEvents(false);
+                IOTReader.SetReaderTypes();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
 
             global.mainForm = (MainForm)this;
             inited = true;
@@ -132,7 +139,7 @@ namespace TrustArch
                 IOTReader reader = (IOTReader)global.readers[i];
                 brush = new SolidBrush(Organization.colors[reader.OrgId]);
 
-                gc.DrawString("R"+reader.Id.ToString(), new Font("arial", 10), brush,
+                gc.DrawString("R" + reader.Id.ToString(), new Font("arial", 10), brush,
                     (float)reader.X + offsetX, (float)reader.Y + offsetY);
                 if (reader.IsGateway)
                     brush = new SolidBrush(Color.Black);

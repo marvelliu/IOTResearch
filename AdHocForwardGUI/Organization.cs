@@ -209,7 +209,6 @@ namespace AdHocBaseApp
                     if (global.orgs[i].nodes[j].Y > global.layoutY)
                         global.orgs[i].nodes[j].Y = global.layoutY;
                 }
-
             }
         }
 
@@ -225,6 +224,16 @@ namespace AdHocBaseApp
                 global.readers[i].Y = 10000;
             }
 
+            for (int i = 0; i < global.readerNum; i++)
+            {
+                double x = 0, y = 0;
+                //double maxdist = 0;
+                x = Utility.U_Rand(global.layoutX);
+                y = Utility.U_Rand(global.layoutY);
+                global.readers[i].X = x;
+                global.readers[i].Y = y;
+            }
+            /*
             for (int i = 0; i < global.orgs[0].nodes.Count; i++)
             {
                 double x = 0, y = 0;
@@ -234,6 +243,7 @@ namespace AdHocBaseApp
                 global.orgs[0].nodes[i].X = x;
                 global.orgs[0].nodes[i].Y = y;
             }
+             */
         }
         
 

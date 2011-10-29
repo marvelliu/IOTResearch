@@ -86,7 +86,7 @@ namespace VANETs
                 return;
 
             //Self, ignore
-            if ((pkg.Next != Id && pkg.Next != Node.BroadcastNode.Id) || pkg.NextType != NodeType.READER)
+            if ((pkg.Next != Id && pkg.Next != BroadcastNode.Node.Id) || pkg.NextType != NodeType.READER)
                 return;
 
             switch (pkg.Type)
@@ -359,7 +359,7 @@ namespace VANETs
                     return;
                 else
                 {
-                    Packet pkg2 = new Packet(this, Node.BroadcastNode, PacketType.RSU_CA_FORWARD);
+                    Packet pkg2 = new Packet(this, BroadcastNode.Node, PacketType.RSU_CA_FORWARD);
                     pkg2.TTL = 1;
                     int hops = 10;//TODO
                     pkg2.VANETCaForward = new VANETCAForwardField(this.IssuedCertificate, this.CertificateCache[key].cert, hops);
@@ -407,7 +407,7 @@ namespace VANETs
 
             if (pkg.VANETCaForward.hops-1 == 0)
                 return;
-            Packet pkg1 = new Packet(this, Node.BroadcastNode, PacketType.RSU_CA_FORWARD);
+            Packet pkg1 = new Packet(this, BroadcastNode.Node, PacketType.RSU_CA_FORWARD);
             pkg1.TTL = 1;
             pkg1.VANETCaForward = new VANETCAForwardField(pkg.VANETCaForward.rsuCA, pkg.VANETCaForward.objCA, pkg.VANETCaForward.hops - 1);
             SendPacketDirectly(scheduler.currentTime, pkg1);

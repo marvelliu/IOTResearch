@@ -25,6 +25,7 @@ namespace AdHocBaseApp
         QRY_LINKPATH_ADV,
         CHK_CERT,
         CHK_RT_TIMEOUT,
+        CHK_RECV_PKT,
         CHK_EVENT_TIMEOUT,
         K_ANONY,
         CHK_SUBTREE,
@@ -32,6 +33,8 @@ namespace AdHocBaseApp
         CHK_NATGROUP,
         CHK_NATGROUP1,
         CHK_SW_NB,
+        DEDUCE_EVENT,
+        FWD_EVENT_REPORT,
     }
 
     public class Event : IComparable
