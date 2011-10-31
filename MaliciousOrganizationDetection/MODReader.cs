@@ -29,21 +29,30 @@ namespace MaliciousOrganizationDetection
         //普通节点观察到的现象
         private HashSet<MODPhenomemon> observedPhenomemons;
 
-        private Dictionary<string, Dictionary<int, MODEventTrustResult>> receivedEventReports;
+        private Dictionary<string, Dictionary<Node, MODEventTrustResult>> receivedEventReports;
         private HashSet<string> deducedEventReports;
 
 
-        private Dictionary<int, double> pNormal;
-        private Dictionary<int, double> pSupportByNormal;
-        private Dictionary<int, double> pNonsupportByNormal;
-        private Dictionary<int, double> pSupportByMalicious;
-        private Dictionary<int, double> pNonsupportByMalicious;
+        private Dictionary<Node, double> pNormal;
+        private Dictionary<Node, double> pSupportByNormal;
+        //private Dictionary<Node, double> pNonsupportByNormal;
+        //private Dictionary<Node, double> pSupportByMalicious;
+        private Dictionary<Node, double> pNonsupportByMalicious;
 
-        private Dictionary<int, Dictionary<int, double>> pNBNormal;
-        private Dictionary<int, Dictionary<int, double>> pNBSupportByNormal;
-        private Dictionary<int, Dictionary<int, double>> pNBNonsupportByNormal;
-        private Dictionary<int, Dictionary<int, double>> pNBSupportByMalicious;
-        private Dictionary<int, Dictionary<int, double>> pNBNonsupportByMalicious;
+        private Dictionary<Node, Dictionary<Node, double>> pNBNormal;
+        private Dictionary<Node, Dictionary<Node, double>> pNBSupportByNormal;
+        //private Dictionary<Node, Dictionary<Node, double>> pNBNonsupportByNormal;
+        //private Dictionary<Node, Dictionary<Node, double>> pNBSupportByMalicious;
+        private Dictionary<Node, Dictionary<Node, double>> pNBNonsupportByMalicious;
+
+        //包括了节点和机构的可疑属性
+        private Dictionary<Node, int> nodeSuspectCount;
+        private Dictionary<Node, double> nodeTrust;
+        private Dictionary<Node, List<double>> nodeHistoryVariance;
+
+        private Dictionary<Node, Dictionary<Node, int>> NBNodeSuspectCount;
+        private Dictionary<Node, Dictionary<Node, double>> NBNodeTrust;
+        private Dictionary<Node, Dictionary<Node, List<double>>> NBNodeHistoryVariance;
 
         new public static MODReader ProduceReader(int id, int org)
         {
@@ -57,20 +66,31 @@ namespace MaliciousOrganizationDetection
             this.readerType = ReaderType.NORMAL;
             this.observedPhenomemons = new HashSet<MODPhenomemon>();
             this.neighborSpeedPhenomemons = new Dictionary<int, MODPhenomemon>();
-            this.receivedEventReports = new Dictionary<string, Dictionary<int, MODEventTrustResult>>();
+            this.receivedEventReports = new Dictionary<string, Dictionary<Node, MODEventTrustResult>>();
             this.deducedEventReports = new HashSet<string>();
 
-            this.pNormal = new Dictionary<int, double>();
-            this.pSupportByNormal = new Dictionary<int, double>();
-            this.pNonsupportByNormal = new Dictionary<int, double>();
-            this.pSupportByMalicious = new Dictionary<int, double>();
-            this.pNonsupportByMalicious = new Dictionary<int, double>();
+            this.pNormal = new Dictionary<Node, double>();
+            this.pSupportByNormal = new Dictionary<Node, double>();
+            //this.pNonsupportByNormal = new Dictionary<Node, double>();
+            //this.pSupportByMalicious = new Dictionary<Node, double>();
+            this.pNonsupportByMalicious = new Dictionary<Node, double>();
 
-            this.pNBNormal = new Dictionary<int, Dictionary<int, double>>();
-            this.pNBSupportByNormal = new Dictionary<int, Dictionary<int, double>>();
-            this.pNBNonsupportByNormal = new Dictionary<int, Dictionary<int, double>>();
-            this.pNBSupportByMalicious = new Dictionary<int, Dictionary<int, double>>();
-            this.pNBNonsupportByMalicious = new Dictionary<int, Dictionary<int, double>>();
+            this.pNBNormal = new Dictionary<Node, Dictionary<Node, double>>();
+            this.pNBSupportByNormal = new Dictionary<Node, Dictionary<Node, double>>();
+            //this.pNBNonsupportByNormal = new Dictionary<Node, Dictionary<Node, double>>();
+            //this.pNBSupportByMalicious = new Dictionary<Node, Dictionary<Node, double>>();
+            this.pNBNonsupportByMalicious = new Dictionary<Node, Dictionary<Node, double>>();
+
+            this.nodeSuspectCount = new Dictionary<Node, int>();
+            this.nodeTrust = new Dictionary<Node, double>();
+            this.nodeHistoryVariance = new Dictionary<Node, List<double>>();
+
+            this.NBNodeSuspectCount = new Dictionary<Node, Dictionary<Node, int>>();
+            this.NBNodeTrust = new Dictionary<Node, Dictionary<Node, double>>();
+            this.NBNodeHistoryVariance = new Dictionary<Node, Dictionary<Node, List<double>>>();
+
+
+
 
 
             MODPhenomemon p = new MODPhenomemon(MODPhenomemonType.MOVE_FAST, id);
@@ -214,7 +234,7 @@ namespace MaliciousOrganizationDetection
         {
             bool forge = false;
             MODEventTrustResult result = null;
-            int nodeId = p.nodeId;
+            int suspectNodeId = p.nodeId;
             string pkgIdent = MODEventTrust.GetPacketIdent(p.pkg);
 
             bool isAccept = false;
@@ -223,15 +243,14 @@ namespace MaliciousOrganizationDetection
             if (this.IsMalicious())
             {
                 if (global.deduceMethod == DeduceMethod.Native)//原始的话，恶意节点无条件伪造报告
-
                     forge = true;
             }
 
-            else if (global.deduceMethod == DeduceMethod.Game)
+            else if (global.deduceMethod == DeduceMethod.Game || global.deduceMethod == DeduceMethod.OrgGame)
             {
                 //如果是博弈论，则判断检测节点的观点
                 //此处仅以其周围邻居为参考，而非报告节点的邻居，这是由于ad-hoc的局限性所致的
-                Dictionary<int, MODEventTrustResult> localcachedresults = new Dictionary<int, MODEventTrustResult>();
+                Dictionary<Node, MODEventTrustResult> localcachedresults = new Dictionary<Node, MODEventTrustResult>();
                 foreach (MODEventTrustResult r in results)
                 {
                     localcachedresults.Add(r.reportNode, r);
@@ -241,10 +260,10 @@ namespace MaliciousOrganizationDetection
                 double minBeacon = 10000;
                 foreach (int nbId in this.Neighbors.Keys)
                 {
-                    //如果已经保存，则继续
-                    if (localcachedresults.ContainsKey(nbId))
-                        continue;
                     MODReader nbNode = (MODReader)global.readers[nbId];
+                    //如果已经保存，则继续
+                    if (localcachedresults.ContainsKey(nbNode))
+                        continue;
                     MODEventTrustResult r = null;
                     if (nbNode.IsMalicious())
                     {
@@ -256,7 +275,7 @@ namespace MaliciousOrganizationDetection
                         r = new MODEventTrustResult(p.pkg.Prev, nbId, pkgIdent, MODEventCategoryType.DropPacket, null);
                         r.normal = 1;
                     }
-                    localcachedresults.Add(nbId, r);
+                    localcachedresults.Add(nbNode, r);
 
                     if (minBeacon < this.Neighbors[nbId].firstBeacon)
                     {
@@ -265,42 +284,61 @@ namespace MaliciousOrganizationDetection
                     }
                 }
 
+                Reader minNbNode = global.readers[minNbId];
 
-                if (!this.pNBNormal.ContainsKey(minNbId))
+                if (!this.pNBNormal.ContainsKey(minNbNode))
                 {
-                    this.pNBNormal.Add(minNbId, new Dictionary<int, double>());
-                    this.pNBSupportByNormal.Add(minNbId, new Dictionary<int, double>());
-                    this.pNBSupportByMalicious.Add(minNbId, new Dictionary<int, double>());
-                    this.pNBNonsupportByNormal.Add(minNbId, new Dictionary<int, double>());
-                    this.pNBNonsupportByMalicious.Add(minNbId, new Dictionary<int, double>());
+                    this.pNBNormal.Add(minNbNode, new Dictionary<Node, double>());
+                    this.pNBSupportByNormal.Add(minNbNode, new Dictionary<Node, double>());
+                    this.pNBNonsupportByMalicious.Add(minNbNode, new Dictionary<Node, double>());
                 }
-                if (!this.pNBNormal[minNbId].ContainsKey(this.Id))
+                if (!this.pNBNormal[minNbNode].ContainsKey(this))
                 {
-                    this.pNBNormal[minNbId].Add(this.Id, global.pInitNormal);
-                    this.pNBSupportByNormal[minNbId].Add(this.Id, global.pInitSupportByNormal);
-                    this.pNBSupportByMalicious[minNbId].Add(this.Id, global.pInitSupportByMalicious);
-                    this.pNBNonsupportByNormal[minNbId].Add(this.Id, global.pInitNonsupportByNormal);
-                    this.pNBNonsupportByMalicious[minNbId].Add(this.Id, global.pInitNonsupportByMalicious);
+                    this.pNBNormal[minNbNode].Add(this, global.pInitNormal);
+                    this.pNBSupportByNormal[minNbNode].Add(this, global.pInitSupportByNormal);
+                    this.pNBNonsupportByMalicious[minNbNode].Add(this, global.pInitNonsupportByMalicious);
                 }
+
+
+                if (global.deduceMethod == DeduceMethod.OrgGame)
+                {
+                    Dictionary<Node, MODEventTrustResult> suspectedReportNodes = AdjustNodeTrust(this.NBNodeTrust[minNbNode],
+                        this.NBNodeSuspectCount[minNbNode], localcachedresults, pkgIdent, suspectNodeId);
+                    foreach (Node node in suspectedReportNodes.Keys)
+                    {
+                        if (node.type == NodeType.READER)
+                        {
+                            //nodeTrust是小于1的数
+                            this.pNBSupportByNormal[minNbNode][node] *= this.NBNodeTrust[minNbNode][node];
+                            this.pNBSupportByNormal[minNbNode][node] = 1 - (1 - this.pNBNonsupportByMalicious[minNbNode][node]) * this.NBNodeTrust[minNbNode][node];
+                        }
+                        else//机构，则调整其所有节点的性质概率
+                        {
+                            foreach (Reader r in ((Organization)node).nodes)
+                                this.pNBNormal[minNbNode][node] *= this.NBNodeTrust[minNbNode][r];
+                        }
+                    }
+                }
+
 
 
                 //这个邻居节点对该节点邻居的印象
-                Dictionary<int, double> pMaliciousBySupport = new Dictionary<int, double>();
-                Dictionary<int, double> pMaliciousByNonsupport = new Dictionary<int, double>();
-                Dictionary<int, double> pNormalBySupport = new Dictionary<int, double>();
-                Dictionary<int, double> pNormalByNonsupport = new Dictionary<int, double>();
+                Dictionary<Node, double> pNormalBySupport = new Dictionary<Node, double>();
+                Dictionary<Node, double> pNormalByNonsupport = new Dictionary<Node, double>();
+                
 
-                int[] reportNodes = localcachedresults.Keys.ToArray();
-                foreach (int reportNode in reportNodes)
+                Node[] reportNodes = localcachedresults.Keys.ToArray();
+                foreach (Node reportNode in reportNodes)
                 {
-                    double pMalicious = 1 - this.pNBNormal[minNbId][reportNode];
-                    double p1 = pMalicious * this.pNBSupportByNormal[minNbId][reportNode] + this.pNBNormal[minNbId][reportNode] * this.pNBSupportByNormal[minNbId][reportNode];
-                    pMaliciousBySupport[reportNode] = pMalicious * this.pNBSupportByMalicious[minNbId][reportNode] / p1;
-                    pNormalBySupport[reportNode] = this.pNBNormal[minNbId][reportNode] * this.pNBSupportByNormal[minNbId][reportNode] / p1;
+                    double pMalicious = 1 - this.pNBNormal[minNbNode][reportNode];
+                    double pNBSupportByMalicious = 1 - pNBNonsupportByMalicious[minNbNode][reportNode];
+                    double pNBNonsupportByNormal = 1 - pNBSupportByNormal[minNbNode][reportNode];
 
-                    double p2 = pMalicious * this.pNBSupportByMalicious[minNbId][reportNode] + this.pNBNormal[minNbId][reportNode] * this.pNBNonsupportByMalicious[minNbId][reportNode];
-                    pMaliciousByNonsupport[reportNode] = pMalicious * this.pNBNonsupportByMalicious[minNbId][reportNode] / p2;
-                    pNormalByNonsupport[reportNode] = this.pNBNormal[minNbId][reportNode] * this.pNBNonsupportByNormal[minNbId][reportNode] / p2;
+                    double p1 = pMalicious * this.pNBSupportByNormal[minNbNode][reportNode] + this.pNBNormal[minNbNode][reportNode] * this.pNBSupportByNormal[minNbNode][reportNode];
+                    double p2 = pMalicious * pNBSupportByMalicious + this.pNBNormal[minNbNode][reportNode] * this.pNBNonsupportByMalicious[minNbNode][reportNode];
+
+                    pNormalBySupport[reportNode] = this.pNBNormal[minNbNode][reportNode] * this.pNBSupportByNormal[minNbNode][reportNode] / p1;       
+                    pNormalByNonsupport[reportNode] = this.pNBNormal[minNbNode][reportNode] * pNBNonsupportByNormal / p2;
 
                 }
 
@@ -309,7 +347,7 @@ namespace MaliciousOrganizationDetection
                 //然后模拟计算
                 if (global.deduceMethod == DeduceMethod.Game)
                 {
-                    isAccept = DeduceA2(reportNodes, true, nodeId, localcachedresults, pMaliciousBySupport, pNormalBySupport, pMaliciousByNonsupport, pNormalByNonsupport);
+                    isAccept = DeduceA2(reportNodes, true, suspectNodeId, localcachedresults, pNormalBySupport, pNormalByNonsupport);
                     isSupport = DeduceA1(isAccept);
                     if (isSupport == false)//如果检测节点不同意，则返回
                         forge = true;
@@ -393,30 +431,196 @@ namespace MaliciousOrganizationDetection
             return isSupport;
         }
 
+        public Dictionary<Node, MODEventTrustResult> AdjustNodeTrust(Dictionary<Node, double> localNodeTrust, Dictionary<Node, int> localNodeSuspectCount,
+            Dictionary<Node, MODEventTrustResult> cachedresults, string pkgIdent, int suspectNodeId)
+        {
+            Node[] reportNodes = cachedresults.Keys.ToArray();
+            MODEventTrustResult myReport = cachedresults[this];
+            Dictionary<int, HashSet<int>> orgMapping = new Dictionary<int, HashSet<int>>();
+            Dictionary<Node, MODEventTrustResult> suspectedReportNodes = new Dictionary<Node, MODEventTrustResult>();
+
+            foreach (Node reportNode in reportNodes)
+            {
+                Reader reportReader = ((Reader)reportNode);
+                if (!orgMapping.ContainsKey(reportReader.OrgId))
+                {
+                    orgMapping.Add(reportReader.OrgId, new HashSet<int>());
+                }
+                if (!orgMapping[reportReader.OrgId].Contains(reportReader.Id))
+                    orgMapping[reportReader.OrgId].Add(reportReader.Id);
+            }
+
+            Dictionary<Node, MODEventTrustResult> orgReports = new Dictionary<Node, MODEventTrustResult>();
+            //计算每个机构的一致性
+            foreach (KeyValuePair<int, HashSet<int>> k in orgMapping)
+            {
+                int orgId = k.Key;
+                Organization org = global.orgs[orgId];
+                HashSet<int> nodeIds = k.Value;
+
+                List<MODEventTrustResult> nodeResults = new List<MODEventTrustResult>();
+                foreach (int nodeId in nodeIds)
+                {
+                    nodeResults.Add(cachedresults[global.readers[nodeId]]);
+                }
+
+                MODEventTrustResult orgReport = MODEventTrust.MergeMaliciousEventTrustResult(suspectNodeId, org,
+                    nodeResults, pkgIdent, MODEventCategoryType.DropPacket);
+                MODEventTrust.CalculateRelativeMaliciousEventTrustResult(orgReport, myReport);
+                orgReports.Add(org, orgReport);
+            }
+
+            MODEventTrustResult totalOrgReport = MODEventTrust.MergeMaliciousEventTrustResult(suspectNodeId, MODOrganization.totalOrg,
+                orgReports.Values.ToList(), pkgIdent, MODEventCategoryType.DropPacket);
+
+
+            if (totalOrgReport.variance > global.MaxTotalOrgVariance)
+            {
+                //找到所有与自己差别较大的机构
+                Dictionary<Node, MODEventTrustResult> suspectedReportOrgs = new Dictionary<Node, MODEventTrustResult>();
+                foreach (KeyValuePair<int, HashSet<int>> k in orgMapping)
+                {
+                    int orgId = k.Key;
+                    Organization org = global.orgs[orgId];
+                    double dist = MODEventTrust.Distance(myReport, orgReports[org]);
+                    if (dist > global.MaxReportDistance)
+                        suspectedReportOrgs.Add(org, orgReports[org]);
+                }
+
+                //找到所有可疑的报告节点
+                foreach (KeyValuePair<int, HashSet<int>> k in orgMapping)
+                {
+                    int orgId = k.Key;
+                    Organization org = global.orgs[orgId];
+                    if (suspectedReportOrgs.ContainsKey(org))
+                        continue;
+                    foreach (int nodeId in orgMapping[orgId])
+                    {
+                        Node node = global.readers[nodeId];
+                        if (MODEventTrust.Distance(myReport, cachedresults[node]) > global.MaxReportDistance)
+                            suspectedReportNodes.Add(node, cachedresults[node]);
+                    }
+                }
+
+                //将可疑机构与自己的结果的比较
+                foreach (KeyValuePair<Node, MODEventTrustResult> k in suspectedReportOrgs)
+                {
+                    Node org = k.Key;
+                    double variance = k.Value.myvariance;
+                    if (!localNodeSuspectCount.ContainsKey(org))
+                    {
+                        localNodeSuspectCount.Add(org, 0);
+                        localNodeTrust.Add(org, 1f);
+                    }
+
+                    if (localNodeSuspectCount[org] > global.MaxSuspectedCount)
+                    {
+                        localNodeSuspectCount[org] += 1;
+                        localNodeTrust[org] *= global.SuspectedPunishFactor;
+                    }
+                    else if (this.nodeHistoryVariance.ContainsKey(org) && this.nodeHistoryVariance[org].Count > 1)//曲线至少有两个点
+                    {
+
+                        //使历史记录维持在少数之内
+                        if (nodeHistoryVariance[org].Count > global.MaxHistoryCount)
+                        {
+                            nodeHistoryVariance[org].RemoveRange(0, nodeHistoryVariance[org].Count - global.MaxHistoryCount);
+                        }
+                        double[] arcs = new double[this.nodeHistoryVariance[org].Count];
+
+                        for (int i = 0; i < this.nodeHistoryVariance[org].Count; i++)
+                            arcs[i] = 0.1f * i;
+
+                        LinearRegression reg = new LinearRegression();
+                        reg.BuildLSMCurve(arcs, this.nodeHistoryVariance[org], 1, false);
+                        double x1 = 0.1f * this.nodeHistoryVariance[org].Count;
+                        double dy = reg.C[0] + reg.C[1] * x1;
+                        //如果机构的方差与之前的轨迹不一致，则可疑
+                        if (Math.Abs(dy - variance) > global.MaxNormalVariance)
+                        {
+                            localNodeSuspectCount[org] += 1;
+                            localNodeTrust[org] *= global.SuspectedPunishFactor;
+                        }
+                        if (!this.nodeHistoryVariance.ContainsKey(org))
+                            this.nodeHistoryVariance.Add(org, new List<double>());
+                        this.nodeHistoryVariance[org].Add(variance);
+                    }
+                }
+
+
+                //将可疑节点与自己的结果的比较
+                foreach (KeyValuePair<Node, MODEventTrustResult> k in suspectedReportNodes)
+                {
+                    Node node = k.Key;
+                    double variance = k.Value.myvariance;
+                    if (!localNodeSuspectCount.ContainsKey(node))
+                    {
+                        localNodeSuspectCount.Add(node, 0);
+                        localNodeTrust.Add(node, 1f);
+                    }
+
+                    if (localNodeSuspectCount[node] > global.MaxSuspectedCount)
+                    {
+                        localNodeSuspectCount[node] += 1;
+                        localNodeTrust[node] *= global.SuspectedPunishFactor;
+                    }
+                    else if (this.nodeHistoryVariance.ContainsKey(node) && this.nodeHistoryVariance[node].Count > 1)//曲线至少有两个点
+                    {
+
+                        //使历史记录维持在少数之内
+                        if (nodeHistoryVariance[node].Count > global.MaxHistoryCount)
+                        {
+                            nodeHistoryVariance[node].RemoveRange(0, nodeHistoryVariance[node].Count - global.MaxHistoryCount);
+                        }
+                        double[] arcs = new double[this.nodeHistoryVariance[node].Count];
+
+                        for (int i = 0; i < this.nodeHistoryVariance[node].Count; i++)
+                            arcs[i] = 0.1f * i;
+
+                        LinearRegression reg = new LinearRegression();
+                        reg.BuildLSMCurve(arcs, this.nodeHistoryVariance[node], 1, false);
+                        double x1 = 0.1f * this.nodeHistoryVariance[node].Count;
+                        double dy = reg.C[0] + reg.C[1] * x1;
+                        //如果机构的方差与之前的轨迹不一致，则可疑
+                        if (Math.Abs(dy - variance) > global.MaxNormalVariance)
+                        {
+                            localNodeSuspectCount[node] += 1;
+                            localNodeTrust[node] *= global.SuspectedPunishFactor;
+                        }
+                        if (!this.nodeHistoryVariance.ContainsKey(node))
+                            this.nodeHistoryVariance.Add(node, new List<double>());
+                        this.nodeHistoryVariance[node].Add(variance);
+                    }
+                }
+
+            }
+            return suspectedReportNodes;
+        }
+
 
         //对最终邻居的结果进行分析
-        public void DeduceEventType(string ident)
+        public void DeduceEventType(string pkgIdent)
         {
-            if(MODEventTrustResult.DeducedPackets.Contains(ident))
+            if(MODEventTrustResult.DeducedPackets.Contains(pkgIdent))
                 return;
-            Console.WriteLine("Reader{0} Deduces Event Type for {1}", this.Id, ident);
-            Dictionary<int, MODEventTrustResult> cachedresults = null;
-            if (this.receivedEventReports.ContainsKey(ident))
-                cachedresults = this.receivedEventReports[ident];
+            Console.WriteLine("Reader{0} Deduces Event Type for {1}", this.Id, pkgIdent);
+            Dictionary<Node, MODEventTrustResult> cachedresults = null;
+            if (this.receivedEventReports.ContainsKey(pkgIdent))
+                cachedresults = this.receivedEventReports[pkgIdent];
             else
                 throw new Exception("no such an ident in receivedEventReports");
 
-            int nodeId = -1;
-            foreach (KeyValuePair<int, MODEventTrustResult> r in cachedresults)
+            int suspectNodeId = -1;
+            foreach (KeyValuePair<Node, MODEventTrustResult> r in cachedresults)
             {
-                nodeId = r.Value.node;
+                suspectNodeId = r.Value.node;
                 break;
             }
 
             if (global.deduceMethod == DeduceMethod.Native)
             {
                 int normalCount = 0, maliciousCount = 0;
-                foreach (KeyValuePair<int, MODEventTrustResult> r in cachedresults)
+                foreach (KeyValuePair<Node, MODEventTrustResult> r in cachedresults)
                 {
                     if (r.Value.normal > 0)
                         normalCount++;
@@ -426,69 +630,123 @@ namespace MaliciousOrganizationDetection
                     Console.Write("{0}:{1}\t",r.Key, r.Value.normal);
                 }
                 if (normalCount > maliciousCount)
-                    Console.WriteLine("{0:F4} [{1}] {2}{3} deduces {4}{5} is normal. {6}-{7}", scheduler.currentTime, "DEDUCTION", this.type, this.Id, NodeType.READER, nodeId, normalCount, maliciousCount);
+                    Console.WriteLine("{0:F4} [{1}] {2}{3} deduces {4}{5} is normal. {6}-{7}", scheduler.currentTime, "DEDUCTION", this.type, this.Id, NodeType.READER, suspectNodeId, normalCount, maliciousCount);
                 else
-                    Console.WriteLine("{0:F4} [{1}] {2}{3} deduces {4}{5} is malicious. {6}-{7}", scheduler.currentTime, "DEDUCTION", this.type, this.Id, NodeType.READER, nodeId, normalCount, maliciousCount);
+                    Console.WriteLine("{0:F4} [{1}] {2}{3} deduces {4}{5} is malicious. {6}-{7}", scheduler.currentTime, "DEDUCTION", this.type, this.Id, NodeType.READER, suspectNodeId, normalCount, maliciousCount);
             }
             else
             {
-                if(!cachedresults.ContainsKey(this.Id))
+                if(!cachedresults.ContainsKey(this))
                 {
                     throw new Exception("myresult result is null");
                 }
 
-                //先算先验概率和后验概率
-                foreach(KeyValuePair<int, MODEventTrustResult> k in cachedresults)
+                MODEventTrustResult myReport = cachedresults[this];
+
+                foreach (KeyValuePair<Node, MODEventTrustResult> k in cachedresults)
                 {
                     if (!this.pNormal.ContainsKey(k.Key))
                         this.pNormal.Add(k.Key, global.pInitNormal);
-                    if (!this.pSupportByMalicious.ContainsKey(k.Key))
-                        this.pSupportByMalicious.Add(k.Key, global.pInitSupportByMalicious);
                     if (!this.pSupportByNormal.ContainsKey(k.Key))
                         this.pSupportByNormal.Add(k.Key, global.pInitSupportByNormal);
-                    if (!this.pNonsupportByNormal.ContainsKey(k.Key))
-                        this.pNonsupportByNormal.Add(k.Key, global.pInitNonsupportByNormal);
+                    //if (!this.pSupportByMalicious.ContainsKey(k.Key))
+                    //    this.pSupportByMalicious.Add(k.Key, global.pInitSupportByMalicious);                    
+                    //if (!this.pNonsupportByNormal.ContainsKey(k.Key))
+                    //    this.pNonsupportByNormal.Add(k.Key, global.pInitNonsupportByNormal);
                     if (!this.pNonsupportByMalicious.ContainsKey(k.Key))
                         this.pNonsupportByMalicious.Add(k.Key, global.pInitNonsupportByMalicious);
                 }
-                Dictionary<int, double> pMaliciousBySupport = new Dictionary<int,double>();
-                Dictionary<int, double> pMaliciousByNonsupport = new Dictionary<int, double>();
-                Dictionary<int, double> pNormalBySupport = new Dictionary<int,double>();
-                Dictionary<int, double> pNormalByNonsupport = new Dictionary<int,double>();
+                Node[] reportNodes = cachedresults.Keys.ToArray();
+                
+                
+                Dictionary<Node, double> pNormalBySupport = new Dictionary<Node, double>();                
+                Dictionary<Node, double> pNormalByNonsupport = new Dictionary<Node, double>();
+                //Dictionary<Node, double> pMaliciousBySupport = new Dictionary<Node, double>();
+                //Dictionary<Node, double> pMaliciousByNonsupport = new Dictionary<Node, double>();
 
-                int[] reportNodes = cachedresults.Keys.ToArray();                
-                foreach (int reportNode in reportNodes)
-                {
-                    double pMalicious = 1 - this.pNormal[reportNode];
-                    double p1 = pMalicious * this.pSupportByMalicious[reportNode] + this.pNormal[reportNode] * this.pSupportByNormal[reportNode];
-                    pMaliciousBySupport[reportNode] = pMalicious * this.pSupportByMalicious[reportNode] / p1;
-                    pNormalBySupport[reportNode] = this.pNormal[reportNode] * this.pSupportByNormal[reportNode] / p1;
-
-                    double p2 = pMalicious * this.pSupportByMalicious[reportNode] + this.pNormal[reportNode] * this.pNonsupportByMalicious[reportNode];
-                    pMaliciousByNonsupport[reportNode] = pMalicious * this.pNonsupportByMalicious[reportNode] / p2;
-                    pNormalByNonsupport[reportNode] = this.pNormal[reportNode] * this.pNonsupportByNormal[reportNode] / p2;
-
-                }
-
-
+                
+              
                 if (global.deduceMethod == DeduceMethod.Game)
                 {
+                    //先算先验概率和后验概率
+                    foreach (Node reportNode in reportNodes)
+                    {
+                        double pMalicious = 1 - this.pNormal[reportNode];
+                        double pSupportByMalicious = 1 - this.pNonsupportByMalicious[reportNode];
+                        double pNonsupportByNormal = 1 - this.pSupportByNormal[reportNode];
 
-                    bool isAccept = DeduceA2(reportNodes, true, nodeId, cachedresults, pMaliciousBySupport, pNormalBySupport, pMaliciousByNonsupport, pNormalByNonsupport);
-                    //Console.WriteLine("{0:F4} [{1}] {2}{3} deduces: {4}-{5}", scheduler.currentTime, "DEDUCTION", this.type, this.Id, pGroupNormal, pGroupMalicious);
+
+                        double p1 = pMalicious * pSupportByMalicious
+                            + this.pNormal[reportNode] * this.pSupportByNormal[reportNode];
+                        double p2 = pMalicious * pSupportByMalicious
+                            + this.pNormal[reportNode] * this.pNonsupportByMalicious[reportNode];
+
+                        pNormalBySupport[reportNode] = this.pNormal[reportNode] * this.pSupportByNormal[reportNode] / p1;
+                        pNormalByNonsupport[reportNode] = this.pNormal[reportNode] * pNonsupportByNormal / p2;
+                        //pMaliciousBySupport[reportNode] = pMalicious * this.pSupportByMalicious[reportNode] / p1;
+                        //double pNormalBySupport = 1 - pMaliciousBySupport[reportNode];
+                        //pMaliciousByNonsupport[reportNode] = pMalicious * this.pNonsupportByMalicious[reportNode] / p2;
+                        //double pMaliciousByNonsupport = 1 - pNormalByNonsupport[reportNode];
+
+                    }
+                   
+                    bool isAccept = DeduceA2(reportNodes, true, suspectNodeId, cachedresults, pNormalBySupport, pNormalByNonsupport);
+                    
+                }
+                else if (global.deduceMethod == DeduceMethod.OrgGame)
+                {
+                    Dictionary<Node, MODEventTrustResult> suspectedReportNodes = AdjustNodeTrust(this.nodeTrust, this.nodeSuspectCount, cachedresults, pkgIdent, suspectNodeId);
+
+                    foreach (Node node in suspectedReportNodes.Keys)
+                    {
+                        if (node.type == NodeType.READER)
+                        {
+                            //nodeTrust是小于1的数
+                            this.pSupportByNormal[node] *= this.nodeTrust[node];
+                            this.pNonsupportByMalicious[node] = 1 - (1 - this.pNonsupportByMalicious[node]) * this.nodeTrust[node];
+                        }
+                        else//机构，则调整其所有节点的性质概率
+                        {
+                            foreach (Reader r in ((Organization)node).nodes)
+                                this.pNormal[node] *= this.nodeTrust[r];
+                        }
+                    }
+
+                    foreach (Node reportNode in reportNodes)
+                    {
+                        double pMalicious = 1 - this.pNormal[reportNode];
+                        double pSupportByMalicious = 1 - this.pNonsupportByMalicious[reportNode];
+                        double pNonsupportByNormal = 1 - this.pSupportByNormal[reportNode];
+
+
+                        double p1 = pMalicious * pSupportByMalicious
+                            + this.pNormal[reportNode] * this.pSupportByNormal[reportNode];
+                        double p2 = pMalicious * pSupportByMalicious
+                            + this.pNormal[reportNode] * this.pNonsupportByMalicious[reportNode];
+
+                        pNormalBySupport[reportNode] = this.pNormal[reportNode] * this.pSupportByNormal[reportNode] / p1;
+                        pNormalByNonsupport[reportNode] = this.pNormal[reportNode] * pNonsupportByNormal / p2;
+                        //pMaliciousBySupport[reportNode] = pMalicious * this.pSupportByMalicious[reportNode] / p1;
+                        //double pNormalBySupport = 1 - pMaliciousBySupport[reportNode];
+                        //pMaliciousByNonsupport[reportNode] = pMalicious * this.pNonsupportByMalicious[reportNode] / p2;
+                        //double pMaliciousByNonsupport = 1 - pNormalByNonsupport[reportNode];
+
+                    }
+
+                    bool isAccept = DeduceA2(reportNodes, true, suspectNodeId, cachedresults, pNormalBySupport, pNormalByNonsupport);
+                    
+
                 }
                 else
-                {
-                }
+                    throw new Exception("Unknown deduce type");
             }
 
-            MODEventTrustResult.DeducedPackets.Add(ident);
+            MODEventTrustResult.DeducedPackets.Add(pkgIdent);
             return;
         }
 
-        public bool DeduceA2(int[] reportNodes, bool isDeduceStep2, int nodeId, Dictionary<int, MODEventTrustResult> cachedresults, 
-            Dictionary<int, double> pMaliciousBySupport, Dictionary<int, double> pNormalBySupport,
-            Dictionary<int, double> pMaliciousByNonsupport, Dictionary<int, double> pNormalByNonsupport)
+        public bool DeduceA2(Node[] reportNodes, bool isDeduceStep2, int nodeId, Dictionary<Node, MODEventTrustResult> cachedresults,
+            Dictionary<Node, double> pNormalBySupport, Dictionary<Node, double> pNormalByNonsupport)
         {
 
             double pGroupNormal = 0, pGroupMalicious = 0;
@@ -500,38 +758,42 @@ namespace MaliciousOrganizationDetection
             //只计算占优势的一方
             for (int m = reportNodes.Length / 2 + 1; m < reportNodes.Length; m++)
             {
-                List<int[]> list = c.combination(reportNodes, m);
+                List<Node[]> list = c.combination(reportNodes, m);
 
                 for (int i = 0; i < list.Count; i++)
                 {
                     double p1 = 1, p2 = 1, p3 = 1, p4 = 1, p5 = 1, p6 = 1;
-                    int[] temp = (int[])list[i];
-                    HashSet<int> usedId = new HashSet<int>();
+                    Node[] temp = (Node[])list[i];
+                    HashSet<Node> usedNodes = new HashSet<Node>();
                     for (int j = 0; j < temp.Length; j++)
                     {
                         double pMalicious = 1 - this.pNormal[temp[j]];
+                        double pMaliciousBySupport = 1 - pNormalBySupport[temp[j]];
+                        double pMaliciousByNonsupport = 1 - pNormalByNonsupport[temp[j]];
                         p1 = p1 * this.pNormal[temp[j]];
                         p2 = p2 * pMalicious;
                         p3 = p3 * pNormalBySupport[temp[j]];
-                        p4 = p4 * pMaliciousBySupport[temp[j]];
+                        p4 = p4 * pMaliciousBySupport;
                         p5 = p5 * pNormalByNonsupport[temp[j]];
-                        p6 = p6 * pMaliciousByNonsupport[temp[j]];
-                        usedId.Add(temp[j]);
+                        p6 = p6 * pMaliciousByNonsupport;
+                        usedNodes.Add(temp[j]);
                         //Console.Write("{0}*", this.pNormal[temp[j]]);
                     }
 
-                    foreach (int node in cachedresults.Keys)//找出异常的节点
+                    foreach (Node node in cachedresults.Keys)//找出异常的节点
                     {
-                        if (!usedId.Contains(node))
+                        if (!usedNodes.Contains(node))
                         {
                             double pMalicious = 1 - this.pNormal[node];
+                            double pMaliciousBySupport = 1 - pNormalBySupport[node];
+                            double pMaliciousByNonsupport = 1 - pNormalByNonsupport[node];
                             p1 = p1 * pMalicious;
                             p2 = p2 * this.pNormal[node];
 
-                            p3 = p3 * pMaliciousBySupport[node];
+                            p3 = p3 * pMaliciousBySupport;
                             p4 = p4 * pNormalBySupport[node];
 
-                            p5 = p5 * pMaliciousByNonsupport[node];
+                            p5 = p5 * pMaliciousByNonsupport;
                             p6 = p6 * pNormalByNonsupport[node];
                         }
                     }
@@ -629,19 +891,19 @@ namespace MaliciousOrganizationDetection
         }
 
 
-        public void PunishMaliciousNodes(bool normal, Dictionary<int, MODEventTrustResult> results)
+        public void PunishMaliciousNodes(bool normal, Dictionary<Node, MODEventTrustResult> results)
         {
-            foreach (KeyValuePair<int, MODEventTrustResult> result in results)
+            foreach (KeyValuePair<Node, MODEventTrustResult> result in results)
             {
-                int nodeId = result.Key;
+                Node node = result.Key;
 
                 if (normal == (result.Value.normal > 0))//两者一致
                 {
-                    this.pNormal[nodeId] = this.pNormal[nodeId] * global.RewardFactor;
+                    this.pNormal[node] = this.pNormal[node] * global.RewardFactor;
                 }
                 else
                 {
-                    this.pNormal[nodeId] = this.pNormal[nodeId] * global.PunishmentFactor;
+                    this.pNormal[node] = this.pNormal[node] * global.PunishmentFactor;
                 }
             }
 
@@ -649,29 +911,29 @@ namespace MaliciousOrganizationDetection
             foreach (int nbId in this.Neighbors.Keys)
             {
                 //如果邻居
-                if (results.ContainsKey(nbId))
+                MODReader nbNode = (MODReader)global.readers[nbId];
+                if (results.ContainsKey(nbNode))
                 {
-                    MODReader nbNode = (MODReader)global.readers[nbId];
-                    if (!nbNode.pNBNormal.ContainsKey(this.Id))
+                    if (!nbNode.pNBNormal.ContainsKey(this))
                     {
-                        nbNode.pNBNormal.Add(this.Id, new Dictionary<int, double>());
-                        nbNode.pNBSupportByNormal.Add(this.Id, new Dictionary<int, double>());
-                        nbNode.pNBSupportByMalicious.Add(this.Id, new Dictionary<int, double>());
-                        nbNode.pNBNonsupportByNormal.Add(this.Id, new Dictionary<int, double>());
-                        nbNode.pNBNonsupportByMalicious.Add(this.Id, new Dictionary<int, double>());
+                        nbNode.pNBNormal.Add(this, new Dictionary<Node, double>());
+                        nbNode.pNBSupportByNormal.Add(this, new Dictionary<Node, double>());
+                        //nbNode.pNBSupportByMalicious.Add(this, new Dictionary<Node, double>());
+                        //nbNode.pNBNonsupportByNormal.Add(this, new Dictionary<Node, double>());
+                        nbNode.pNBNonsupportByMalicious.Add(this, new Dictionary<Node, double>());
                     }
-                    if (!nbNode.pNBNormal[this.Id].ContainsKey(nbId))
+                    if (!nbNode.pNBNormal[this].ContainsKey(nbNode))
                     {
-                        nbNode.pNBNormal[this.Id].Add(nbId, global.pInitNormal);
-                        nbNode.pNBSupportByNormal[this.Id].Add(nbId, global.pInitSupportByNormal);
-                        nbNode.pNBSupportByMalicious[this.Id].Add(nbId, global.pInitSupportByMalicious);
-                        nbNode.pNBNonsupportByNormal[this.Id].Add(nbId, global.pInitNonsupportByNormal);
-                        nbNode.pNBNonsupportByMalicious[this.Id].Add(nbId, global.pInitNonsupportByMalicious);
+                        nbNode.pNBNormal[this].Add(nbNode, global.pInitNormal);
+                        nbNode.pNBSupportByNormal[this].Add(nbNode, global.pInitSupportByNormal);
+                        //nbNode.pNBSupportByMalicious[this].Add(nbNode, global.pInitSupportByMalicious);
+                        //nbNode.pNBNonsupportByNormal[this].Add(nbNode, global.pInitNonsupportByNormal);
+                        nbNode.pNBNonsupportByMalicious[this].Add(nbNode, global.pInitNonsupportByMalicious);
                     }
-                    if(normal == (results[nbId].normal > 0))
-                        nbNode.pNBNormal[this.Id][nbId] *= global.RewardFactor;
+                    if (normal == (results[nbNode].normal > 0))
+                        nbNode.pNBNormal[this][nbNode] *= global.RewardFactor;
                     else
-                        nbNode.pNBNormal[this.Id][nbId] *= global.PunishmentFactor;
+                        nbNode.pNBNormal[this][nbNode] *= global.PunishmentFactor;
                 }
             }
         }
@@ -680,7 +942,7 @@ namespace MaliciousOrganizationDetection
         //在接收到DATA数据包后，检查是否发生了抛弃数据包的情况
         public void CheckReceivedPacket(MODPhenomemon p)
         {
-            int nodeId = p.nodeId;
+            int suspectNodeId = p.nodeId;            
             List<MODEventTrustResult> results = new List<MODEventTrustResult>();
 
             Console.WriteLine("[Debug] node{0} CheckReceivedPacket of {1}", this.Id, MODEventTrust.GetPacketIdent(p.pkg));
@@ -690,122 +952,25 @@ namespace MaliciousOrganizationDetection
                 return;
 
             MODEventTrustResult result = GetEventTrustResult(p, results);
-
-            string ident = result.eventIdent;
-            if (!this.receivedEventReports.ContainsKey(ident))
+            
+            string pkgIdent = result.eventIdent;
+            if (!this.receivedEventReports.ContainsKey(pkgIdent))
             {
-                this.receivedEventReports.Add(ident, new Dictionary<int, MODEventTrustResult>());
-                this.receivedEventReports[ident].Add(this.Id, result);
+                this.receivedEventReports.Add(pkgIdent, new Dictionary<Node, MODEventTrustResult>());
+                this.receivedEventReports[pkgIdent].Add(this, result);
             }
-
-
-            //如果是恶意节点，则会考察检测节点可能的动作
-            if (this.IsMalicious() && global.deduceMethod == DeduceMethod.Game)
-            {
-                //如果是博弈论，则判断检测节点的观点
-                //此处仅以其周围邻居为参考，而非报告节点的邻居，这是由于ad-hoc的局限性所致的
-                Dictionary<int, MODEventTrustResult> cachedresults = new Dictionary<int, MODEventTrustResult>();
-                //初始化邻居的结构，且找到最久的邻居
-                int minNbId = -1;
-                double minBeacon = 10000;
-                foreach (int nbId in this.Neighbors.Keys)
-                {
-                    MODReader nbNode = (MODReader)global.readers[nbId];
-                    MODEventTrustResult r = new MODEventTrustResult(p.pkg.Prev, nbId, ident, MODEventCategoryType.DropPacket, null);
-                    if (nbNode.IsMalicious())
-                    {
-                        r.normal = -1;
-                    }
-                    else
-                    {
-                        r.normal = 1;
-                    }
-                    cachedresults.Add(nbId, r);
-
-                    if (minBeacon < this.Neighbors[nbId].firstBeacon)
-                    {
-                        minBeacon = Neighbors[nbId].firstBeacon;
-                        minNbId = nbId;
-                    }
-                }
-
-
-                if (!this.pNBNormal.ContainsKey(minNbId))
-                {
-                    this.pNBNormal.Add(minNbId, new Dictionary<int, double>());
-                    this.pNBSupportByNormal.Add(minNbId, new Dictionary<int, double>());
-                    this.pNBSupportByMalicious.Add(minNbId, new Dictionary<int, double>());
-                    this.pNBNonsupportByNormal.Add(minNbId, new Dictionary<int, double>());
-                    this.pNBNonsupportByMalicious.Add(minNbId, new Dictionary<int, double>());
-                }
-                if (!this.pNBNormal[minNbId].ContainsKey(this.Id))
-                {
-                    this.pNBNormal[minNbId].Add(this.Id, global.pInitNormal);
-                    this.pNBSupportByNormal[minNbId].Add(this.Id, global.pInitSupportByNormal);
-                    this.pNBSupportByMalicious[minNbId].Add(this.Id, global.pInitSupportByMalicious);
-                    this.pNBNonsupportByNormal[minNbId].Add(this.Id, global.pInitNonsupportByNormal);
-                    this.pNBNonsupportByMalicious[minNbId].Add(this.Id, global.pInitNonsupportByMalicious);
-                }
-
-
-                //这个邻居节点对该节点邻居的印象
-                Dictionary<int, double> pMaliciousBySupport = new Dictionary<int, double>();
-                Dictionary<int, double> pMaliciousByNonsupport = new Dictionary<int, double>();
-                Dictionary<int, double> pNormalBySupport = new Dictionary<int, double>();
-                Dictionary<int, double> pNormalByNonsupport = new Dictionary<int, double>();
-
-                int[] reportNodes = cachedresults.Keys.ToArray();
-                foreach (int reportNode in reportNodes)
-                {
-                    double pMalicious = 1 - this.pNBNormal[minNbId][reportNode];
-                    double p1 = pMalicious * this.pNBSupportByNormal[minNbId][reportNode] + this.pNBNormal[minNbId][reportNode] * this.pNBSupportByNormal[minNbId][reportNode];
-                    pMaliciousBySupport[reportNode] = pMalicious * this.pNBSupportByMalicious[minNbId][reportNode] / p1;
-                    pNormalBySupport[reportNode] = this.pNBNormal[minNbId][reportNode] * this.pNBSupportByNormal[minNbId][reportNode] / p1;
-
-                    double p2 = pMalicious * this.pNBSupportByMalicious[minNbId][reportNode] + this.pNBNormal[minNbId][reportNode] * this.pNBNonsupportByMalicious[minNbId][reportNode];
-                    pMaliciousByNonsupport[reportNode] = pMalicious * this.pNBNonsupportByMalicious[minNbId][reportNode] / p2;
-                    pNormalByNonsupport[reportNode] = this.pNBNormal[minNbId][reportNode] * this.pNBNonsupportByNormal[minNbId][reportNode] / p2;
-
-                }
-
-
-                //然后模拟计算
-                if (global.deduceMethod == DeduceMethod.Game)
-                {
-                    bool isAccept = DeduceA2(reportNodes, true, nodeId, cachedresults, pMaliciousBySupport, pNormalBySupport, pMaliciousByNonsupport, pNormalByNonsupport);
-                    if (isAccept == false)//如果检测节点不同意，则返回
-                        return;
-                }
-            }
-
 
             //正常节点
-            if (result.normal > 0 && this.receivedEventReports[ident][this.Id].normal == result.normal)//normal
+            if (result.normal > 0 && this.receivedEventReports[pkgIdent][this].normal == result.normal)//normal
                 return;
             //报告恶意事件
             if (global.debug)
                 Console.WriteLine("reader{0} report a event of {1} of reader{2}", Id, result.eventIdent, result.node);
-
-            /*
-            results.Add(result);
-
             
-            byte[] buf = new byte[global.BufSize];
-            MemoryStream ms = new MemoryStream(buf);
-            BinaryFormatter formatter = new BinaryFormatter();
-            formatter.Serialize(ms, results);
-            byte[] tmp = new byte[ms.Position];
-            Array.Copy(buf, tmp, ms.Position);
-
-            Packet pkg = new Packet(this, BroadcastNode.Node, PacketType.EVENT_REPORT);
-            pkg.TrustReport = new TrustReportField(0, tmp, tmp.Length);
-            SendPacketDirectly(scheduler.currentTime, pkg);
-             * */
-
             //过一段时间转发事件报告
-            Event.AddEvent(new Event(scheduler.currentTime + 0.05f, EventType.FWD_EVENT_REPORT, this, ident));
+            Event.AddEvent(new Event(scheduler.currentTime + 0.05f, EventType.FWD_EVENT_REPORT, this, pkgIdent));
             //过一段时间检查事件报告
-            Event.AddEvent(new Event(scheduler.currentTime + global.checkPhenomemonTimeout, EventType.DEDUCE_EVENT, this, ident));
+            Event.AddEvent(new Event(scheduler.currentTime + global.checkPhenomemonTimeout, EventType.DEDUCE_EVENT, this, pkgIdent));
         }
 
         public bool IsMalicious()
@@ -837,10 +1002,10 @@ namespace MaliciousOrganizationDetection
                 Console.WriteLine("READER{0} recv {1} reports. ident:{2}", Id, results.Count, ident);
 
 
-            Dictionary<int, MODEventTrustResult> cachedresults = null;
+            Dictionary<Node, MODEventTrustResult> cachedresults = null;
             if (!this.receivedEventReports.ContainsKey(ident))
             {
-                this.receivedEventReports.Add(ident, new Dictionary<int, MODEventTrustResult>());
+                this.receivedEventReports.Add(ident, new Dictionary<Node, MODEventTrustResult>());
             }
 
             int newcount = 0;
@@ -858,20 +1023,20 @@ namespace MaliciousOrganizationDetection
             if (newcount == 0)//和以前的一样，返回即可
                 return;
 
-            if (!cachedresults.ContainsKey(this.Id) || cachedresults[this.Id].eventIdent=="")
+            if (!cachedresults.ContainsKey(this) || cachedresults[this].eventIdent=="")
             {
                 MODPhenomemon p = MODEventTrust.GetPhenomemon(ident, this.Id, this.observedPhenomemons);
                 MODEventTrustResult myresult = null;
                 if (p != null)//观察到现象
                 {
                     myresult = GetEventTrustResult(p, cachedresults.Values.ToList());
-                    cachedresults.Add(this.Id, myresult);
+                    cachedresults.Add(this, myresult);
                 }
                 else
                 {
                     myresult = MODEventTrust.NotObservedEventTrustResult(suspectedNodeId, this.Id,
                             "", MODEventCategoryType.DropPacket);
-                    cachedresults[this.Id] = myresult;
+                    cachedresults[this] = myresult;
                 }
                 //TODO 这里涉及到没有观察到收到数据包，应该是不支持节点异常的 myresult.normal = //;
                 

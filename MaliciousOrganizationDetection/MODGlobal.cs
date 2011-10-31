@@ -10,6 +10,7 @@ namespace MaliciousOrganizationDetection
     {
         Native = 0,
         Game,
+        OrgGame,
     }
     public class MODGlobal:Global
     {
@@ -67,6 +68,20 @@ namespace MaliciousOrganizationDetection
 
         public double PunishmentFactor = 0.8f;
         public double RewardFactor = 1.0f;
+
+        //某机构报告与自己最大的差异，超过则可疑
+        public double MaxReportDistance = 1f;
+        //机构之间一致性最大值，超过则可能出现恶意机构
+        public double MaxTotalOrgVariance = 1f;
+
+        public int MaxSuspectedCount = 3;
+
+        public double SuspectedPunishFactor = 0.8f;
+
+        public int MaxHistoryCount = 5;
+
+        //用最小二乘法预测节点方差，如果超过阈值则认为可能是有问题的
+        public double MaxNormalVariance = 1f;
 
 
         new public static MODGlobal ProduceGlobal()

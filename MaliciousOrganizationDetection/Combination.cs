@@ -2,15 +2,16 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using AdHocBaseApp;
 
 namespace MaliciousOrganizationDetection
 {
     class Combination
     {
-        public List<int[]> combination(int[] a, int m)
+        public List<Node[]> combination(Node[] a, int m)
         {
             Combination c = new Combination();
-            List<int[]> list = new List<int[]>();
+            List<Node[]> list = new List<Node[]>();
             int n = a.Length;
             bool end = false; // 是否是最后一种组合的标记   
             // 生成辅助数组。首先初始化，将数组前n个元素置1，表示第一个组合为前n个数。   
@@ -73,18 +74,21 @@ namespace MaliciousOrganizationDetection
         }
 
         // 根据辅助数组和原始数组生成结果数组   
-        public int[] createResult(int[] a, int[] temp, int m) {
-        int[] result = new int[m];
-        int j = 0;
-        for (int i = 0; i < a.Length; i++) {
-            if (temp[i] == 1) {
-                result[j] = a[i];
-                //Console.WriteLine("result[" + j + "]:" + result[j]);
-                j++;
+        public Node[] createResult(Node[] a, int[] temp, int m)
+        {
+            Node[] result = new Node[m];
+            int j = 0;
+            for (int i = 0; i < a.Length; i++)
+            {
+                if (temp[i] == 1)
+                {
+                    result[j] = a[i];
+                    //Console.WriteLine("result[" + j + "]:" + result[j]);
+                    j++;
+                }
             }
+            return result;
         }
-        return result;
-    }
         /*
         // 打印整组数组
         public void print(List<int[]> list) {

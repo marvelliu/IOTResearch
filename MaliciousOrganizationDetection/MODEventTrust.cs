@@ -55,13 +55,15 @@ namespace MaliciousOrganizationDetection
     public class MODEventTrustResult
     {
         public int node;
-        public int reportNode;
+        public Node reportNode;
         public string eventIdent;
         public DSClass ds;
         public int app;
         public int totalEventCount;
         public int nodeReportCount;
         public int normal = 1; //总体判断，如果小于0表示异常
+        public double variance = 0; //其内部的方差
+        public double myvariance = 0;//与自己的方差
 
         public static int Conv(MODEventType type)
         {
@@ -112,7 +114,20 @@ namespace MaliciousOrganizationDetection
 
         public static Dictionary<MODEventType, double> confirmBeliefThrehold;
 
-        public MODEventTrustResult(int node, int reportNode, string pkgIdent, MODEventCategoryType category, DSClass ds)
+        public MODEventTrustResult(int node, int reportNodeId, string pkgIdent, MODEventCategoryType category, DSClass ds)
+        {
+            this.node = node;
+            this.reportNode = Global.getInstance().readers[reportNodeId];
+            this.ds = ds;
+            this.eventIdent = pkgIdent;
+            //TODO app
+
+            confirmBeliefThrehold = new Dictionary<MODEventType, double>();
+            confirmBeliefThrehold[MODEventType.DropPacketMaliciously] = 0.3;
+        }
+
+
+        public MODEventTrustResult(int node, Node reportNode, string pkgIdent, MODEventCategoryType category, DSClass ds)
         {
             this.node = node;
             this.reportNode = reportNode;
@@ -313,7 +328,7 @@ namespace MaliciousOrganizationDetection
             ds.Cal();
             //ds.Output();
             string pkgIdent = GetPacketIdent(p.pkg);
-            MODEventTrustResult r = new MODEventTrustResult(node, selfId, pkgIdent, MODEventCategoryType.DropPacket, ds);
+            MODEventTrustResult r = new MODEventTrustResult(node, global.readers[selfId], pkgIdent, MODEventCategoryType.DropPacket, ds);
 
             //此处，我们先过滤一些正常事件，否则事件太多了
             if (ds.b[pow(MODEventType.NotDropPacket) + pow(MODEventType.NotDropPacketButNotReceivePacket)] < global.NormalBelief
@@ -423,7 +438,7 @@ namespace MaliciousOrganizationDetection
                     && ds.p[pow(MODEventType.NotDropPacket) + pow(MODEventType.NotDropPacketButNotReceivePacket)] < global.NormalPlausibility)//确实是攻击,恶意事件的信念大于正常事件，或恶意事件的信念大于某一个阈值
                 {
                     string pkgIdent = GetPacketIdent(p.pkg);
-                    MODEventTrustResult r = new MODEventTrustResult(node, selfId, pkgIdent, MODEventCategoryType.DropPacket, ds);
+                    MODEventTrustResult r = new MODEventTrustResult(node, global.readers[selfId], pkgIdent, MODEventCategoryType.DropPacket, ds);
                     r.totalEventCount = eventCount[node];
                     r.app = p.pkg.AppId;
                     list.Add(r);
@@ -613,6 +628,99 @@ namespace MaliciousOrganizationDetection
             MODEventTrustResult result = new MODEventTrustResult(node, reportNode, pkgIdent, category, ds);
             result.normal = -1;
             return result;
+        }
+
+        public static MODEventTrustResult MergeMaliciousEventTrustResult(int node, Node reportNode, List<MODEventTrustResult> reports, string pkgIdent, MODEventCategoryType category)
+        {
+            double b0 = 0.0;
+            double b1 = 0.0;
+            double b2 = 0.0;
+            double b3 = 0.0;
+
+            //各个b的方差
+            double x0 = 0, x1 = 0, x2 = 0, x3 = 0;
+
+            DSClass ds = new DSClass(pow(MODDropPacketEventType.END));
+
+
+            //TODO，确认下面是否是正确的
+            for (int i = 0; i < reports.Count; i++)
+            {
+                b0 += reports[i].ds.b[0];
+                b1 += reports[i].ds.b[1];
+                b2 += reports[i].ds.b[2];
+                b3 += reports[i].ds.b[3];
+            }
+            b0 = b0 / reports.Count;
+            b1 = b1 / reports.Count;
+            b2 = b2 / reports.Count;
+            b3 = b3 / reports.Count;
+
+
+            ds.SetM(pow(MODDropPacketEventType.NotDropPacket), b0);
+            ds.SetM(pow(MODDropPacketEventType.NotDropPacketButNotReceivePacket), b1);
+            ds.SetM(pow(MODDropPacketEventType.DropPacketDueToBandwith), b2);
+            ds.SetM(pow(MODDropPacketEventType.DropPacketMaliciously), b3);
+            ds.SetM(pow(MODDropPacketEventType.END) - 1, 1 - b0 - b1 - b2 - b3);
+            ds.Cal();
+
+            //计算方差，即一致度
+            //TODO，确认下面是否是正确的
+            for (int i = 0; i < reports.Count; i++)
+            {
+                x0 += Math.Pow(b0 - reports[i].ds.b[0], 2);
+                x1 += Math.Pow(b1 - reports[i].ds.b[1], 2);
+                x2 += Math.Pow(b2 - reports[i].ds.b[2], 2);
+                x3 += Math.Pow(b3 - reports[i].ds.b[3], 2);
+            }
+
+            MODEventTrustResult result = new MODEventTrustResult(node, reportNode, pkgIdent, category, ds);
+            result.variance = x0 + x1 + x2 + x3;
+            return result;
+        }
+
+        //与自己预测的相关度
+        public static void CalculateRelativeMaliciousEventTrustResult(MODEventTrustResult r, MODEventTrustResult myreport)
+        {
+            double b0 = r.ds.b[0] + myreport.ds.b[0];
+            double b1 = r.ds.b[1] + myreport.ds.b[1];;
+            double b2 = r.ds.b[2] + myreport.ds.b[2];;
+            double b3 = r.ds.b[3] + myreport.ds.b[3];;
+
+            b0 = b0/2;
+            b1 = b1/2;
+            b2 = b2/2;
+            b3 = b3/2;
+
+            //各个b的方差
+            double x0 = 0, x1 = 0, x2 = 0, x3 = 0;
+
+            DSClass ds = new DSClass(pow(MODDropPacketEventType.END));
+            
+            ds.SetM(pow(MODDropPacketEventType.NotDropPacket), b0);
+            ds.SetM(pow(MODDropPacketEventType.NotDropPacketButNotReceivePacket), b1);
+            ds.SetM(pow(MODDropPacketEventType.DropPacketDueToBandwith), b2);
+            ds.SetM(pow(MODDropPacketEventType.DropPacketMaliciously), b3);
+            ds.SetM(pow(MODDropPacketEventType.END) - 1, 1 - b0 - b1 - b2 - b3);
+            ds.Cal();
+
+            x0 = Math.Pow(b0 - r.ds.b[0], 2) + Math.Pow(b0 - myreport.ds.b[0], 2);
+            x1 = Math.Pow(b1 - r.ds.b[1], 2) + Math.Pow(b1 - myreport.ds.b[1], 2);
+            x2 = Math.Pow(b2 - r.ds.b[2], 2) + Math.Pow(b2 - myreport.ds.b[2], 2);
+            x3 = Math.Pow(b3 - r.ds.b[3], 2) + Math.Pow(b3 - myreport.ds.b[3], 2);
+
+            
+            r.myvariance = x0 + x1 + x2 + x3;
+            return;
+        }
+
+        //两个结果的差别
+        public static double Distance(MODEventTrustResult r1, MODEventTrustResult r2)
+        {
+            return Math.Pow(r1.ds.b[0] - r2.ds.b[0], 2)
+                + Math.Pow(r1.ds.b[1] - r2.ds.b[1], 2)
+                + Math.Pow(r1.ds.b[2] - r2.ds.b[2], 2)
+                + Math.Pow(r1.ds.b[3] - r2.ds.b[3], 2);
         }
 
         static int pow(MODDropPacketEventType t)

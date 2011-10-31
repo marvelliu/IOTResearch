@@ -22,5 +22,7 @@ namespace MaliciousOrganizationDetection
         }
 
         public bool IsMalicious = false;
+
+        public static MODOrganization totalOrg = new MODOrganization(-1, "Oall");
     }
 }

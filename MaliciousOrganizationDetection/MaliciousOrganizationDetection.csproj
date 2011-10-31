@@ -50,6 +50,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Combination.cs" />
+    <Compile Include="Curve.cs" />
     <Compile Include="DSClass.cs" />
     <Compile Include="MODEventTrust.cs" />
     <Compile Include="MODPhenomemon.cs" />
