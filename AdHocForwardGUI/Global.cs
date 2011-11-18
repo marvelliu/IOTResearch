@@ -105,6 +105,8 @@ namespace AdHocBaseApp
         //public SortedList<double, Event> events = new SortedList<double,Event>();
         public List<Event> events = new List<Event>();
 
+        public double[] orgRatio = null;
+
 
 
         public ObjectNodeConstructor objectNodeConstructor;
@@ -194,7 +196,16 @@ namespace AdHocBaseApp
                 else if (v[1] == "AVG")
                     orgGenType = OrgGenType.AVG;
                 else if (v[1] == "CUS1")
+                {
                     orgGenType = OrgGenType.CUS1;
+                    orgRatio = new double[orgNum];
+
+                    for (int i = 0; i < v.Length - 2; i++)
+                    {
+                        double ratio = double.Parse(v[i+2]);
+                        orgRatio[i] = ratio;
+                    }            
+                }
             }
             else if (v[0] == "Poisson_Lamda")
                 PoissonLamda = float.Parse(v[1]);

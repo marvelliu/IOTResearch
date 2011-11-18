@@ -135,6 +135,15 @@ namespace AdHocBaseApp
                 }
                 v[global.orgNum-1] += (global.readerNum - totalnode);
             }
+            else if (global.orgGenType == OrgGenType.CUS1)//指定每个机构的节点的比例
+            {
+                for (int i = 0; i < global.orgNum; i++)
+                {
+                    v[i] = global.orgRatio[i]*global.readerNum;
+                    totalv += v[i];
+                }
+                v[global.orgNum - 1] += (global.readerNum - totalv);
+            }
 
             totalnode = 0;
             global.orgs = new Organization[global.orgNum];

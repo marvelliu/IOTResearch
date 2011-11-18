@@ -10,7 +10,7 @@ namespace MaliciousOrganizationDetection
 {
     class MODOrganization:Organization
     {
-        public ReaderType orgType = ReaderType.NORMAL;
+        public BehaviorType orgType = BehaviorType.NORMAL;
         new public static MODOrganization ProduceOrganization(int id, string name)
         {
             return new MODOrganization(id, name);
@@ -21,7 +21,6 @@ namespace MaliciousOrganizationDetection
         {
         }
 
-        public bool IsMalicious = false;
 
         public static MODOrganization totalOrg = new MODOrganization(-1, "Oall");
     }

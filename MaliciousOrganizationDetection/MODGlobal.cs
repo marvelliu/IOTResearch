@@ -24,7 +24,7 @@ namespace MaliciousOrganizationDetection
         public double checkTimeoutPhenomemonLikehood = 0.7; //如果检测到一个超时的数据包未被发送，其似然值
 
         public float checkEventTimeout = 4;
-        public float checkPhenomemonTimeout = 2;
+        public float checkPhenomemonTimeout = 1;
         public float checkReceivedPacketTimeout = 2;
         public float checkNodeTimeout = 8;
         public float checkNodeTypeTimeout = 16;
@@ -37,51 +37,93 @@ namespace MaliciousOrganizationDetection
         public double NormalPlausibility = 0.7;
 
         //public DeduceMethod deduceMethod = DeduceMethod.Native;
-        public DeduceMethod deduceMethod = DeduceMethod.Game;
+        //public DeduceMethod deduceMethod = DeduceMethod.Game;
+        public DeduceMethod Step2DeduceMethod = DeduceMethod.OrgGame;
+        public DeduceMethod Step1DeduceMethod = DeduceMethod.OrgGame;
 
 
+        
         //对于恶意的报告节点所得
-        public double uA1MaliciousAndSupportAndAccept = -1f;
-        public double uA1MaliciousAndSupportAndReject = 0.5f;
-        public double uA1MaliciousAndNonsupportAndAccept = -0.5f;
-        public double uA1MaliciousAndNonsupportAndReject = 0.5f;
+        //由于使用博弈的必定是恶意节点，故我本身是恶意节点
+        //恶意节点的收益有两部分，一部分是信誉值的变化(+0.2,-0.3)，另一部分是恶意行为所带来的收益(0.5,0)
+        public double uA1MaliciousAndSupportAndAccept = 0.7f;//事件是恶意的，我认为是正常的，检测节点接受(本次作恶赢得了额外的利益)
+        public double uA1MaliciousAndSupportAndReject = -0.5f;//事件是恶意的，我认为是正常的，检测节点拒绝(本次作恶没有利益，相反被降低了信誉值)
+        public double uA1MaliciousAndNonsupportAndAccept = 0.2f;//事件是恶意的，我认为也是恶意的，检测节点接受(本次没有作恶，增加了信誉值）
+        public double uA1MaliciousAndNonsupportAndReject = -1f;//事件是恶意的，我认为也是恶意的，检测节点拒绝(本次没有作恶，相反被降低了信誉值，所以最不可能做)
+        
+        public double uA1NormalAndSupportAndAcceptAndISupport = 0.2f;//事件是正常的，整体报告认为也是正常的，检测节点接受，我也认为是正常的(本次没有作恶，收益是信誉值增加了一点点)
+        public double uA1NormalAndSupportAndAcceptAndINonsupport = 0.2f;//事件是正常的，整体报告认为也是正常的，检测节点接受，我认为是异常的(本次作恶，有收益，但惩罚信誉值降低)
+        public double uA1NormalAndSupportAndReject = -1f;//事件是正常的，我认为也是正常的，检测节点拒绝整体(本次没有作恶，相反被降低了信誉值，所以最不可能做)
+        public double uA1NormalAndNonsupportAndAccept = 0.7f;//事件是正常的，我认为是恶意的，检测节点接受(本次作恶赢得了额外的利益）
+        public double uA1NormalAndNonsupportAndReject = -0.5f;//事件是正常的，我认为是恶意的，检测节点拒绝(本次作恶没有成功)
+
 
 
         //对于检测节点所得
-        public double uA2NormalAndSupportAndAccept = 1f;
-        public double uA2NormalAndSupportAndReject = 0.3f;
-        public double uA2NormalAndNonsupportAndAccept = 0.5f;
-        public double uA2NormalAndNonsupportAndReject = 0.2f;
-        public double uA2MaliciousAndSupportAndAccept = -1f;
-        public double uA2MaliciousAndSupportAndReject = 0.5f;
-        public double uA2MaliciousAndNonsupportAndAccept = -0.5f;
-        public double uA2MaliciousAndNonsupportAndReject = 0.5f;
+        //此处SupportM为"支持事件为恶意节点"
+        public double uA2DropAndNormalAndSupportMDAndAccept = 0.5f;//恶意事件，报告节点为正常节点，支持是恶意报告，接受风险较少
+        public double uA2FwrdAndNormalAndSupportMDAndAccept = -0.5f;//接受正常报告，风险较少
+        public double uA2DropAndNormalAndSupportMDAndReject = -0.5f;
+        public double uA2FwrdAndNormalAndSupportMDAndReject = 0.5f;
+        public double uA2DropAndNormalAndNonsupportMDAndAccept = -0.5f;
+        public double uA2FwrdAndNormalAndNonsupportMDAndAccept = 0.5f;
+        public double uA2DropAndNormalAndNonsupportMDAndReject = 0.5f;
+        public double uA2FwrdAndNormalAndNonsupportMDAndReject = -0.5f;
+        public double uA2DropAndMaliciousAndSupportMDAndAccept = 0.5f;
+        public double uA2FwrdAndMaliciousAndSupportMDAndAccept = -0.5f;
+        public double uA2DropAndMaliciousAndSupportMDAndReject = -0.5f;
+        public double uA2FwrdAndMaliciousAndSupportMDAndReject = 0.5f;
+        public double uA2DropAndMaliciousAndNonsupportMDAndAccept = -0.5f;
+        public double uA2FwrdAndMaliciousAndNonsupportMDAndAccept = 0.5f;
+        public double uA2DropAndMaliciousAndNonsupportMDAndReject = 0.5f;
+        public double uA2FwrdAndMaliciousAndNonsupportMDAndReject = -0.5f;
 
+        public double pInitDropBySupportM = 0.5;
+        public double pInitDropByNonsupportM = 0.5;
+        public double pMaxDropBySupportM = 0.9;
+        public double pMinDropByNonsupportM = 0.1;
+        public double pDropBySupportMFactor = 0.5;
+        
         public int BufSize = 2048;
 
 
-        public double pInitNormal = 0.5f;
-        public double pInitSupportByNormal = 0.2f;
-        public double pInitNonsupportByNormal = 0.8f;
-        public double pInitSupportByMalicious = 0.8f;
-        public double pInitNonsupportByMalicious = 0.2f;
+        public double pInitDrop = 0.5f;
+        public double pInitNormal = 0.6f;
+        public int pInitIterationNormal = 1;
+        public int pInitIterationMalicious = 1;
+        public int pInitIterationSupportM = 1;
+        public int pInitIterationNonsupportM = 1;
 
         public double PunishmentFactor = 0.8f;
         public double RewardFactor = 1.0f;
 
         //某机构报告与自己最大的差异，超过则可疑
-        public double MaxReportDistance = 1f;
+        public double MaxReportDistance = 0.5f;
         //机构之间一致性最大值，超过则可能出现恶意机构
-        public double MaxTotalOrgVariance = 1f;
+        public double MaxTotalOrgVariance = 0.5f;
 
         public int MaxSuspectedCount = 3;
 
         public double SuspectedPunishFactor = 0.8f;
 
+        public double AdjustFactor = 0.8;
+        public double SuspectedCountBase = 6f;
+        public double VarianceBase = 1.1;
+        public double HistoryVSDBase = 6f;
+
         public int MaxHistoryCount = 5;
 
         //用最小二乘法预测节点方差，如果超过阈值则认为可能是有问题的
         public double MaxNormalVariance = 1f;
+
+        //统计过去一段时间内某节点的恶意事件频率
+        public int maxCountPeriod = 5;
+
+        public int MaxReportCount = 15;
+
+        //为了缩小范围，只检测特定的节点，如检测节点1，则会考察节点1发送到其他节点时，其他节点是否drop
+        public HashSet<int> monitoredNodes = new HashSet<int>();
+
 
 
         new public static MODGlobal ProduceGlobal()
@@ -95,11 +137,36 @@ namespace MaliciousOrganizationDetection
 
         override public void ParseArgs(string[] v)
         {
-            if (v[0] == "minSrcDstDist")
-            { 
+            if (v[0] == "Step1DeduceMethod")
+            {
+                Step1DeduceMethod = (DeduceMethod)Enum.Parse(typeof(DeduceMethod), v[1]);
+            }
+            else if (v[0] == "Step2DeduceMethod")
+            {
+                Step2DeduceMethod = (DeduceMethod)Enum.Parse(typeof(DeduceMethod), v[1]);
+            }
+            else if (v[0] == "AdjustFactor")
+            {
+                AdjustFactor = double.Parse(v[1]);
+            }
+            else if (v[0] == "SuspectedCountBase")
+            {
+                SuspectedCountBase = double.Parse(v[1]);
+            }
+            else if (v[0] == "VarianceBase")
+            {
+                VarianceBase = double.Parse(v[1]);
+            }
+            else if (v[0] == "HistoryVSDBase")
+            {
+                HistoryVSDBase = double.Parse(v[1]);
             }
             else
+            {
                 base.ParseArgs(v);
+                return;
+            }
+            Console.WriteLine(v[0] + ":" + v[1]);
         }
 
     }

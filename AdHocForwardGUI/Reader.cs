@@ -127,6 +127,10 @@ namespace AdHocBaseApp
                 EventType.CHK_PEND_PKT, this, null));
         }
 
+        public static Reader GetReader(int readerId)
+        {
+            return Global.getInstance().readers[readerId];
+        }
 
 
         public bool HasNeighbor(int id)

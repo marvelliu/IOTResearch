@@ -13,6 +13,20 @@ namespace MaliciousOrganizationDetection
             Combination c = new Combination();
             List<Node[]> list = new List<Node[]>();
             int n = a.Length;
+            if (m == 0)
+            {
+                list.Add(new Node[] { });
+                return list;
+            }
+            else if (m == n)
+            {
+                Node[] temp = new Node[a.Length];
+                a.CopyTo(temp, 0);
+                list.Add(a);
+                return list;
+            }
+
+
             bool end = false; // 是否是最后一种组合的标记   
             // 生成辅助数组。首先初始化，将数组前n个元素置1，表示第一个组合为前n个数。   
             int[] tempNum = new int[n];

@@ -55,13 +55,16 @@ namespace MaliciousOrganizationDetection
     public class MODEventTrustResult
     {
         public int node;
-        public Node reportNode;
+        public int reportNodeId;
         public string eventIdent;
         public DSClass ds;
         public int app;
         public int totalEventCount;
         public int nodeReportCount;
-        public int normal = 1; //总体判断，如果小于0表示异常
+        public double timeStamp;
+        //总体对事件是否真实判断，如果小于0表示认为该事件是真实的(恶意).由于初始报告总是报告恶意事件，所以判断总体正常就是对源报告的不支持，反之亦然
+        //默认是正常的，即不支持是恶意的
+        public int supportDroppingMalicious = -1; 
         public double variance = 0; //其内部的方差
         public double myvariance = 0;//与自己的方差
 
@@ -117,7 +120,7 @@ namespace MaliciousOrganizationDetection
         public MODEventTrustResult(int node, int reportNodeId, string pkgIdent, MODEventCategoryType category, DSClass ds)
         {
             this.node = node;
-            this.reportNode = Global.getInstance().readers[reportNodeId];
+            this.reportNodeId = Global.getInstance().readers[reportNodeId].Id;
             this.ds = ds;
             this.eventIdent = pkgIdent;
             //TODO app
@@ -130,13 +133,14 @@ namespace MaliciousOrganizationDetection
         public MODEventTrustResult(int node, Node reportNode, string pkgIdent, MODEventCategoryType category, DSClass ds)
         {
             this.node = node;
-            this.reportNode = reportNode;
+            this.reportNodeId = reportNode.Id;
             this.ds = ds;
             this.eventIdent = pkgIdent;
             //TODO app
 
             confirmBeliefThrehold = new Dictionary<MODEventType, double>();
             confirmBeliefThrehold[MODEventType.DropPacketMaliciously] = 0.3;
+            this.timeStamp = Scheduler.getInstance().currentTime;
         }
 
         public static HashSet<string> DeducedPackets = new HashSet<string>();
@@ -259,7 +263,8 @@ namespace MaliciousOrganizationDetection
         }
 
 
-        public static MODEventTrustResult DeduceDropPacketMaliciouslyByPacket(int selfId, HashSet<MODPhenomemon> observedPhenomemons, double currentTime, MODPhenomemon p)
+        public static MODEventTrustResult DeduceDropPacketMaliciouslyByPacket(int selfId, 
+            HashSet<MODPhenomemon> observedPhenomemons, double currentTime, MODPhenomemon p)
         {
             double a1, a2, a3, a4, a5, a6, a7, a19, a27;
             if (Global.getInstance().debug)
@@ -301,6 +306,7 @@ namespace MaliciousOrganizationDetection
             //A1 AND A2 AND A7 AND A11 -> B1
             double b3 = DSClass.AND(DSClass.AND(DSClass.AND(DSClass.AND(a1, a3), a5), a7), a27) * CF[(int)MODEventType.DropPacketMaliciously];
 
+            /*
             if (global.debug)
             {
                 Console.WriteLine("{0}->{1}:{2}", selfId, node, p.pkg.SrcSenderSeq);
@@ -317,7 +323,7 @@ namespace MaliciousOrganizationDetection
                 Console.WriteLine("b1:" + b1);
                 Console.WriteLine("b2:" + b2);
                 Console.WriteLine("b3:" + b3);
-            }
+            }*/
 
             DSClass ds = new DSClass(pow(MODDropPacketEventType.END));
             ds.SetM(pow(MODDropPacketEventType.NotDropPacket), b0);
@@ -335,12 +341,14 @@ namespace MaliciousOrganizationDetection
                 && ds.p[pow(MODEventType.NotDropPacket) + pow(MODEventType.NotDropPacketButNotReceivePacket)] < global.NormalPlausibility)//确实是攻击,恶意事件的信念大于正常事件，或恶意事件的信念大于某一个阈值
             {
                 Console.WriteLine("{0:F4} reader{1} think reader{2} is not normal.", currentTime, selfId, p.nodeId);
-                r.normal = -1;
+                r.supportDroppingMalicious = 1;
+                /*
                 if (global.debug)
-                {
                     r.ds.Output();
-                }
+                 * */
             }
+            else
+                r.supportDroppingMalicious = -1;
             return r;
         }
 
@@ -588,13 +596,20 @@ namespace MaliciousOrganizationDetection
             return likehood;
         }
 
+        //基准速度，考察该速度下可能判断失误
+        static public double baseSpeed = 5;
 
-        public static MODEventTrustResult NotObservedEventTrustResult(int node, int reportNode, string pkgIdent, MODEventCategoryType category)
+        //如果本节点是其邻居，那么判断没有收到所有数据包的情况
+        public static MODEventTrustResult NotObservedEventTrustResult(int suspectedNode, int reportNode, string pkgIdent, MODEventCategoryType category, double speed)
         {
-            double b0 = 0.4;
-            double b1 = 0.2;
-            double b2 = 0.2;
-            double b3 = 0.2;
+            //与速度有关
+            double b1 = Math.Min(0.3 * speed / baseSpeed, 0.7);
+            //如果速度为0，也可能存在其他误差，设一个较小的值
+            if (b1 == 0)
+                b1 = 0.02;
+            double b2 = 0.1;
+            double b0 = (1 - b1 - b2) / 2;
+            double b3 = b0;
 
             DSClass ds = new DSClass(pow(MODDropPacketEventType.END));
             ds.SetM(pow(MODDropPacketEventType.NotDropPacket), b0);
@@ -604,8 +619,9 @@ namespace MaliciousOrganizationDetection
             ds.SetM(pow(MODDropPacketEventType.END) - 1, 1 - b0 - b1 - b2 - b3);
             ds.Cal();
 
-            MODEventTrustResult result = new MODEventTrustResult(node, reportNode, pkgIdent, category, ds);
-            result.normal = 1;
+            MODEventTrustResult result = new MODEventTrustResult(suspectedNode, reportNode, pkgIdent, category, ds);
+            //不支持是事件恶意的
+            result.supportDroppingMalicious = -1;
             return result;
         }
 
@@ -626,11 +642,32 @@ namespace MaliciousOrganizationDetection
             ds.Cal();
 
             MODEventTrustResult result = new MODEventTrustResult(node, reportNode, pkgIdent, category, ds);
-            result.normal = -1;
+            result.supportDroppingMalicious = 1;
             return result;
         }
 
-        public static MODEventTrustResult MergeMaliciousEventTrustResult(int node, Node reportNode, List<MODEventTrustResult> reports, string pkgIdent, MODEventCategoryType category)
+        public static MODEventTrustResult ForgeNormalEventTrustResult(int node, int reportNode, string pkgIdent, MODEventCategoryType category)
+        {
+            double b0 = 0.7;
+            double b1 = 0.1;
+            double b2 = 0.1;
+            double b3 = 0.1;
+
+            DSClass ds = new DSClass(pow(MODDropPacketEventType.END));
+            ds.SetM(pow(MODDropPacketEventType.NotDropPacket), b0);
+            ds.SetM(pow(MODDropPacketEventType.NotDropPacketButNotReceivePacket), b1);
+            ds.SetM(pow(MODDropPacketEventType.DropPacketDueToBandwith), b2);
+            ds.SetM(pow(MODDropPacketEventType.DropPacketMaliciously), b3);
+            ds.SetM(pow(MODDropPacketEventType.END) - 1, 1 - b0 - b1 - b2 - b3);
+            ds.Cal();
+
+            MODEventTrustResult result = new MODEventTrustResult(node, reportNode, pkgIdent, category, ds);
+            result.supportDroppingMalicious = -1;
+            return result;
+        }
+
+        public static MODEventTrustResult MergeMaliciousEventTrustResult(int node, Node reportNode, List<MODEventTrustResult> reports, 
+            string pkgIdent, MODEventCategoryType category)
         {
             double b0 = 0.0;
             double b1 = 0.0;
@@ -646,16 +683,15 @@ namespace MaliciousOrganizationDetection
             //TODO，确认下面是否是正确的
             for (int i = 0; i < reports.Count; i++)
             {
-                b0 += reports[i].ds.b[0];
-                b1 += reports[i].ds.b[1];
-                b2 += reports[i].ds.b[2];
-                b3 += reports[i].ds.b[3];
+                b0 += reports[i].ds.b[pow(MODDropPacketEventType.NotDropPacket)];
+                b1 += reports[i].ds.b[pow(MODDropPacketEventType.NotDropPacketButNotReceivePacket)];
+                b2 += reports[i].ds.b[pow(MODDropPacketEventType.DropPacketDueToBandwith)];
+                b3 += reports[i].ds.b[pow(MODDropPacketEventType.DropPacketMaliciously)];
             }
             b0 = b0 / reports.Count;
             b1 = b1 / reports.Count;
             b2 = b2 / reports.Count;
             b3 = b3 / reports.Count;
-
 
             ds.SetM(pow(MODDropPacketEventType.NotDropPacket), b0);
             ds.SetM(pow(MODDropPacketEventType.NotDropPacketButNotReceivePacket), b1);
@@ -668,24 +704,30 @@ namespace MaliciousOrganizationDetection
             //TODO，确认下面是否是正确的
             for (int i = 0; i < reports.Count; i++)
             {
-                x0 += Math.Pow(b0 - reports[i].ds.b[0], 2);
-                x1 += Math.Pow(b1 - reports[i].ds.b[1], 2);
-                x2 += Math.Pow(b2 - reports[i].ds.b[2], 2);
-                x3 += Math.Pow(b3 - reports[i].ds.b[3], 2);
+                x0 += Math.Pow(b0 - reports[i].ds.b[pow(MODDropPacketEventType.NotDropPacket)], 2);
+                x1 += Math.Pow(b1 - reports[i].ds.b[pow(MODDropPacketEventType.NotDropPacketButNotReceivePacket)], 2);
+                x2 += Math.Pow(b2 - reports[i].ds.b[pow(MODDropPacketEventType.DropPacketDueToBandwith)], 2);
+                x3 += Math.Pow(b3 - reports[i].ds.b[pow(MODDropPacketEventType.DropPacketMaliciously)], 2);
             }
 
             MODEventTrustResult result = new MODEventTrustResult(node, reportNode, pkgIdent, category, ds);
             result.variance = x0 + x1 + x2 + x3;
+
+            if (result.ds.b[pow(MODEventType.NotDropPacket) + pow(MODEventType.NotDropPacketButNotReceivePacket)] < global.NormalBelief
+                && result.ds.p[pow(MODEventType.NotDropPacket) + pow(MODEventType.NotDropPacketButNotReceivePacket)] < global.NormalPlausibility)//确实是攻击,恶意事件的信念大于正常事件，或恶意事件的信念大于某一个阈值
+                result.supportDroppingMalicious = 1;
+            else
+                result.supportDroppingMalicious = -1;
             return result;
         }
 
         //与自己预测的相关度
         public static void CalculateRelativeMaliciousEventTrustResult(MODEventTrustResult r, MODEventTrustResult myreport)
         {
-            double b0 = r.ds.b[0] + myreport.ds.b[0];
-            double b1 = r.ds.b[1] + myreport.ds.b[1];;
-            double b2 = r.ds.b[2] + myreport.ds.b[2];;
-            double b3 = r.ds.b[3] + myreport.ds.b[3];;
+            double b0 = r.ds.b[pow(MODDropPacketEventType.NotDropPacket)] + myreport.ds.b[pow(MODDropPacketEventType.NotDropPacket)];
+            double b1 = r.ds.b[pow(MODDropPacketEventType.NotDropPacketButNotReceivePacket)] + myreport.ds.b[pow(MODDropPacketEventType.NotDropPacketButNotReceivePacket)];
+            double b2 = r.ds.b[pow(MODDropPacketEventType.DropPacketDueToBandwith)] + myreport.ds.b[pow(MODDropPacketEventType.DropPacketDueToBandwith)];
+            double b3 = r.ds.b[pow(MODDropPacketEventType.DropPacketMaliciously)] + myreport.ds.b[pow(MODDropPacketEventType.DropPacketMaliciously)]; ;
 
             b0 = b0/2;
             b1 = b1/2;
@@ -704,14 +746,33 @@ namespace MaliciousOrganizationDetection
             ds.SetM(pow(MODDropPacketEventType.END) - 1, 1 - b0 - b1 - b2 - b3);
             ds.Cal();
 
-            x0 = Math.Pow(b0 - r.ds.b[0], 2) + Math.Pow(b0 - myreport.ds.b[0], 2);
-            x1 = Math.Pow(b1 - r.ds.b[1], 2) + Math.Pow(b1 - myreport.ds.b[1], 2);
-            x2 = Math.Pow(b2 - r.ds.b[2], 2) + Math.Pow(b2 - myreport.ds.b[2], 2);
-            x3 = Math.Pow(b3 - r.ds.b[3], 2) + Math.Pow(b3 - myreport.ds.b[3], 2);
+            x0 = Math.Pow(b0 - r.ds.b[pow(MODDropPacketEventType.NotDropPacket)], 2) + Math.Pow(b0 - myreport.ds.b[pow(MODDropPacketEventType.NotDropPacket)], 2);
+            x1 = Math.Pow(b1 - r.ds.b[pow(MODDropPacketEventType.NotDropPacketButNotReceivePacket)], 2) + Math.Pow(b1 - myreport.ds.b[pow(MODDropPacketEventType.NotDropPacketButNotReceivePacket)], 2);
+            x2 = Math.Pow(b2 - r.ds.b[pow(MODDropPacketEventType.DropPacketDueToBandwith)], 2) + Math.Pow(b2 - myreport.ds.b[pow(MODDropPacketEventType.DropPacketDueToBandwith)], 2);
+            x3 = Math.Pow(b3 - r.ds.b[pow(MODDropPacketEventType.DropPacketMaliciously)], 2) + Math.Pow(b3 - myreport.ds.b[pow(MODDropPacketEventType.DropPacketMaliciously)], 2);
 
             
             r.myvariance = x0 + x1 + x2 + x3;
             return;
+        }
+
+        //恶意节点的收益有两部分，一部分是信誉值的变化(+0.2,-0.3)，另一部分是恶意行为所带来的收益(0.5,0)
+        public static double A1Fun(bool Malicious, bool ISupport, bool TotalSupport, bool Accept)
+        {
+            double reputation = 0, gain = 0;
+            if (ISupport == TotalSupport ^ Accept)
+                reputation = 0.2;
+            else
+                reputation = -0.3;
+
+            if (ISupport == false)
+                gain = 0.5;
+            else
+                gain = 0.0;
+
+            double  result = reputation+gain;
+            return result;
+
         }
 
         //两个结果的差别

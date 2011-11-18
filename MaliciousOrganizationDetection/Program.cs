@@ -55,9 +55,20 @@ namespace MaliciousOrganizationDetection
                 }
                 else if (args[i].StartsWith("--"))
                 {
-                    v = new string[2];
-                    v[0] = args[i].Substring(2);
-                    v[1] = args[i + 1];
+                    if (args[i + 1].IndexOf(" ") > 0)
+                    {
+                        string[] v1 = args[i + 1].Split(new char[] { ' ' });
+                        v = new string[1 + v1.Length];
+                        v[0] = args[i].Substring(2);
+                        for (int j = 0; j < v1.Length; j++)
+                            v[j + 1] = v1[j];
+                    }
+                    else
+                    {
+                        v = new string[2];
+                        v[0] = args[i].Substring(2);
+                        v[1] = args[i + 1];
+                    }
                     i++;
                     global.ParseArgs(v);
                 }
