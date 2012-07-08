@@ -27,6 +27,7 @@ namespace VANETs
                 if (Utility.U_Rand(1) < global.wiredProportion)
                 {
                     ((VANETReader)reader).IsWired = true;
+                    Console.WriteLine("Reader {0} is wired.", reader.Id);
 
                     /*
                     reader.IsGateway = true;
@@ -84,6 +85,8 @@ namespace VANETs
                 server.BackboneNodeDB.Add(reader);
                 server.BackboneNodeMapping[reader.Id] = server.BackboneNodeDB.Count;
                 Console.WriteLine("Reader {0} is set as gateway.", reader.Id);
+
+                global.readers[reader.Id].gatewayEntities[-1] = new GatewayEntity(reader.Id, reader.Id, 0);
             }
             Console.WriteLine(v[0] + ":" + v[1]);
         }

@@ -107,6 +107,7 @@ namespace AdHocBaseApp
                 type = "T";
             }
 
+            HashSet<int> ignoreOrgs = new HashSet<int> { 0, 1 };
             Global global = Global.getInstance();
             string line = null;
             StreamWriter sw = null;
@@ -121,7 +122,7 @@ namespace AdHocBaseApp
                     int node = -1;
                     do{
                         node = (int)Utility.U_Rand(global.readerNum);
-                    }while(nodes.Contains(node));
+                    } while (nodes.Contains(node) || ignoreOrgs.Contains(global.readers[node].OrgId));
                     nodes.Add(node);
                     for (int i = 0; i < eventCount; i++)
                     {
@@ -152,7 +153,7 @@ namespace AdHocBaseApp
         public void ClearEvents(string filename, string cmd)
         {
             Global global = Global.getInstance();
-            string tempfile = global.eventsFileName + ".tmp";
+            string tempfile = filename + ".tmp";
             string line = null;
 
             StreamReader sr = null;
@@ -171,8 +172,8 @@ namespace AdHocBaseApp
                 sr.Close();
             if (sw != null)
                 sw.Close();
-            File.Delete(global.eventsFileName);
-            File.Move(tempfile, global.eventsFileName);
+            File.Delete(filename);
+            File.Move(tempfile, filename);
         }
     }
 

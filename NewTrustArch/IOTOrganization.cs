@@ -250,14 +250,14 @@ namespace NewTrustArch
         }
 
 
-        public override void SendPacketDirectly(float time, Packet pkg)
+        public override bool SendPacketDirectly(float time, Packet pkg)
         {
             pkg.Prev = Id;
             Console.WriteLine("{0:F4} [{1}] {2}{3} sends to {4}{5}", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.NextType, (pkg.Next == -1 ? "all" : pkg.Next.ToString()));
 
             float recv_time = global.serverProcessDelay + global.internetDelay;
-            if (pkg.Next == -1) //Broadcast
-                return;//No such a case.
+            if (pkg.Next == BroadcastNode.Node.Id) //Broadcast
+                return true;//No such a case.
             else
             {
                 Node node = null;
@@ -286,6 +286,7 @@ namespace NewTrustArch
                     new Event(time + recv_time, EventType.RECV,
                         node, pkg));
             }
+            return true;
         }
 
 

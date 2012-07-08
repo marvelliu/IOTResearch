@@ -10,10 +10,11 @@ namespace AdHocBaseApp
 {
     public enum RouteMethod
     {
-        SW_AODV,
+        TAGGED_AODV,
         AODV,
         Adaptive,
-        SmallWorld
+        SmallWorld,
+        CBRP //Cluster Based Routing Protocol
     }
 
     public delegate Global GlobalConstructor();
@@ -48,6 +49,7 @@ namespace AdHocBaseApp
 
         public Reader[] readers = null;
         public int readerNum = -1;
+        public bool listenNeighborAODVReply = false;
 
         public Organization[] orgs = new Organization[0];
 
@@ -99,6 +101,8 @@ namespace AdHocBaseApp
         public int SendEventDuration = 1;//每回发送时间
         public int SendEventInterval = 1;//每回中每次发送的间隔
 
+        public double refSpeed = 1;
+
         //draw
         public bool drawLine = false;
 
@@ -106,6 +110,9 @@ namespace AdHocBaseApp
         public List<Event> events = new List<Event>();
 
         public double[] orgRatio = null;
+
+        //如果AODV reply是给邻居的，那本节点就不做处理
+        public bool IngoreNeigbhorAODVReply = true;
 
 
 
@@ -128,7 +135,7 @@ namespace AdHocBaseApp
         ///VANET
         public int vanetNetworkSize = -1;
         public float wiredProportion = 0;
-        public string vanetCaForward = "none";
+        public bool vanetCaForward = false;
         public float checkCertDelay = 100000;
 
         public bool LoadConfigFile()
@@ -147,7 +154,7 @@ namespace AdHocBaseApp
             sr = new StreamReader(filename);
             for (line = sr.ReadLine(); line != null; line = sr.ReadLine())
             {
-                if (line[0] == '#')
+                if (line=="" || line[0] == '#')
                     continue;
                 string[] v = line.Split(seperators, StringSplitOptions.RemoveEmptyEntries);
                 ParseArgs(v);
@@ -180,7 +187,16 @@ namespace AdHocBaseApp
                     queriers[i] = querierConstructor(i);
             }
             else if (v[0] == "event_file")
+            {
                 eventsFileName = v[1];
+                int i1 = eventsFileName.IndexOf("-s")+2;
+                int i2 = eventsFileName.IndexOf("-", i1+1);
+                string s = eventsFileName.Substring(i1, i2 - i1);
+                double s1 = double.Parse(s);
+                refSpeed = 1 / Math.Sqrt((s1+1) / 5);
+                if (refSpeed > 1)
+                    refSpeed *= 2;
+            }
             else if (v[0] == "node_dist")
                 nodeDist = float.Parse(v[1]);
             else if (v[0] == "node_maxdist")
@@ -202,9 +218,9 @@ namespace AdHocBaseApp
 
                     for (int i = 0; i < v.Length - 2; i++)
                     {
-                        double ratio = double.Parse(v[i+2]);
+                        double ratio = double.Parse(v[i + 2]);
                         orgRatio[i] = ratio;
-                    }            
+                    }
                 }
             }
             else if (v[0] == "Poisson_Lamda")
@@ -229,7 +245,8 @@ namespace AdHocBaseApp
                 CheckReverseRouteCache = bool.Parse(v[1]);
             else if (v[0] == "check_gateway_cache")
                 CheckGatewayCache = bool.Parse(v[1]);
-            else if (v[0] == "random_seed"){
+            else if (v[0] == "random_seed")
+            {
                 int seed = int.Parse(v[1]);
                 Utility.ran = new Random(seed);
             }
@@ -239,14 +256,6 @@ namespace AdHocBaseApp
                 nodraw = bool.Parse(v[1]);
             else if (v[0] == "debug")
                 debug = bool.Parse(v[1]);
-            else if (v[0] == "vanet_network_size")
-                vanetNetworkSize = int.Parse(v[1]);
-            else if (v[0] == "ca_forward")
-                vanetCaForward = v[1];
-            else if (v[0] == "wired_proportion")
-                wiredProportion = float.Parse(v[1]);
-            else if (v[0] == "check_cert_delay")
-                checkCertDelay = float.Parse(v[1]);
             else if (v[0] == "routeMethod")
                 routeMethod = (RouteMethod)Enum.Parse(typeof(RouteMethod), v[1], true);
             Console.WriteLine(v[0] + ":" + v[1]);

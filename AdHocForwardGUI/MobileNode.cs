@@ -48,8 +48,9 @@ namespace AdHocBaseApp
         }
 
 
-        public override void SendPacketDirectly(float time, Packet pkg)
+        public override bool SendPacketDirectly(float time, Packet pkg)
         {
+            return true;
         }
 
         public override void ProcessPacket(Packet pkg)

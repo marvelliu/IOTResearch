@@ -25,7 +25,9 @@ namespace AdHocBaseApp
         LOGICAL_PATH_UPDATE,
         LOGICAL_PATH_REQUEST,
         LOGICAL_PATH_REPLY,
-        CERTIFICATE,
+        CERTIFICATE_REQ,
+        CERTIFICATE_REP,
+        CERTIFICATE_OK,
         CERTIFICATE_FAIL,
         RSU_JOIN,
         RSU_NEW_BACKBONE_REQUEST,
@@ -53,6 +55,8 @@ namespace AdHocBaseApp
         NATIVE_LONG_GROUP_REQUEST,
         NATIVE_LONG_GROUP_RESPONSE,
         SW_DATA,
+        CB_REQUEST,
+        CB_REPLY,
         UNKNOWN
     }
 
@@ -112,16 +116,40 @@ namespace AdHocBaseApp
     {
         public int origDst;
         public int origSrc;
+        public int intDst;
+        public int intSrc;
         public PacketType origType;
         public int origSenderSeq;
         public int swTTL;
+        public HashSet<int> visitedHubs;
 
-        public SWRequestField(int origSrc, int origDst, int origSenderSeq, PacketType origType, int ttl)
+        public SWRequestField(int intSrc, int intDst, int origSrc, int origDst, int origSenderSeq, PacketType origType, int ttl)
         {
+            this.intSrc = intSrc;
+            this.intDst = intDst;
             this.origSrc = origSrc;
             this.origDst = origDst;
             this.origSenderSeq = origSenderSeq;
             this.origType = origType;
+            this.swTTL = ttl;
+            this.visitedHubs = new HashSet<int>();
+        }
+    }
+
+
+    [Serializable]
+    public class CBRequestField
+    {
+        public int origDst;
+        public int origSrc;
+        public int origSenderSeq;
+        public int swTTL;
+
+        public CBRequestField(int origSrc, int origDst, int origSenderSeq, int ttl)
+        {
+            this.origSrc = origSrc;
+            this.origDst = origDst;
+            this.origSenderSeq = origSenderSeq;
             this.swTTL = ttl;
         }
     }
@@ -153,13 +181,15 @@ namespace AdHocBaseApp
     {
         public int id;
         public int hops;
+        public int nbs;
         public Certificate cert;
         public bool isWired;
 
-        public VANETRSUJoinField(int id, int hops, Certificate cert, bool isWired)
+        public VANETRSUJoinField(int id, int hops, int nbs, Certificate cert, bool isWired)
         {
             this.id = id;
             this.hops = hops;
+            this.nbs = nbs;
             this.cert = cert;
             this.isWired = isWired;
         }
@@ -191,13 +221,17 @@ namespace AdHocBaseApp
     {
         public Certificate rsuCA;
         public Certificate objCA;
+        public int time;
         public int hops;
+        public int src;
 
-        public VANETCAForwardField(Certificate rsuCA, Certificate objCA, int hops)
+        public VANETCAForwardField(Certificate rsuCA, Certificate objCA, int time, int hops, int src)
         {
             this.rsuCA = rsuCA;
             this.objCA = objCA;
+            this.time = time;
             this.hops = hops;
+            this.src = src;
         }
     }
 
@@ -648,6 +682,7 @@ namespace AdHocBaseApp
         public BeaconField Beacon;
         public AODVRequestField AODVRequest;
         public SWRequestField SWRequest;
+        public CBRequestField CBRequest;
         public LandmarkNotificationField LandmarkNotification;
         public ObjectUpdateLocationField ObjectUpdateLocation;        
         public ObjectLocationQueryRequestField ObjectLocationRequest;
@@ -740,6 +775,12 @@ namespace AdHocBaseApp
         public string getId()
         {
             return this.SrcType.ToString() + this.Src + "-" + this.DstType.ToString() + this.Dst + ":" + this.SrcSenderSeq;
+        }
+
+
+        public static string GetId(NodeType SrcType, int Src, NodeType DstType, int Dst, int SrcSenderSeq)
+        {
+            return SrcType.ToString() + Src + "-" + DstType.ToString() + Dst + ":" + SrcSenderSeq;
         }
                 
         public static bool PacketHeadEqual(Packet a, Packet b)

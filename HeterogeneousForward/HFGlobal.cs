@@ -8,7 +8,11 @@ namespace HeterogeneousForward
 {
     public class HFGlobal:Global
     {
+
         public new MainForm mainForm = null;
+
+        public int clusterHops = 3;
+
 
         public bool ignoreForwardStatagy = false;
         public int tagNameNum = 10;
@@ -23,12 +27,16 @@ namespace HeterogeneousForward
         public int minSwHubAvailTagThrethold = 9;
         public int minSwHubNeighbors = 1;
         public int maxSwHubs = 10;
-        public double maxSwHubRatio = 0.1;
+        public double maxSwHubRatio = 0.2;
 
         public int innerSWTTL = 3;
         public int outerSWTTL = 4;
 
+        public int CBTTL = 3;
+
         public int swTTL = 3;
+
+        public int clusterRadius = 2;
 
         public int currentSWHubNumber = 0;
 
@@ -92,7 +100,8 @@ namespace HeterogeneousForward
                 printTopology = bool.Parse(v[1]);
             else if (v[0] == "printIdealSucc")
                 printIdealSucc = bool.Parse(v[1]);
-                
+            else if (v[0] == "clusterHops")
+                clusterHops = int.Parse(v[1]);                
             else
                 base.ParseArgs(v);
         }

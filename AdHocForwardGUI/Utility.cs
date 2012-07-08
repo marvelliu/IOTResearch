@@ -2,10 +2,12 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Reflection;
+using System.Runtime.Serialization;
 
 namespace AdHocBaseApp
 {
-    public class Utility
+    public static class Utility
     {
         public const int MAX_VAL = 10000;
 
@@ -113,6 +115,17 @@ namespace AdHocBaseApp
             return r;
         }
 
+
+        public static double Average(double[] list)
+        {
+            double sum = 0;
+            for (int i = 1; i < list.Length; i++)
+            {
+                sum += list[i];
+            }
+            return sum/list.Length;
+        }
+
         public static string DumpHashIntSet(HashSet<int> set)
         {
             if (set == null)
@@ -144,18 +157,7 @@ namespace AdHocBaseApp
             return sb.ToString();
         }
 
-        public static void AddHashIntSet(HashSet<int> to, HashSet<int> from)
-        {
-            foreach (int o in from)
-                to.Add(o);
-        }
 
-        public static void CopyHashIntSet(HashSet<int> to, HashSet<int> from)
-        {
-            to.Clear();
-            foreach (int o in from)
-                to.Add(o);
-        }
 
         public static int[] SortDictionary(Dictionary<int, int> d)
         {
@@ -189,5 +191,73 @@ namespace AdHocBaseApp
             foreach (object f in from)
                 to.Add(f);
         }
+
+
+        public static void AddHashSet<T>(HashSet<T> to, HashSet<T> from)
+        {
+            foreach (T o in from)
+                to.Add(o);
+        }
+
+        public static void CopyHashSet<T>(HashSet<T> to, HashSet<T> from)
+        {
+            to.Clear();
+            foreach (T o in from)
+                to.Add(o);
+        }
+
+        /*
+        public static HashSet<T> CloneHashSet<T>(this HashSet<T> original)
+        {
+            var clone = (HashSet<T>)FormatterServices.GetUninitializedObject(typeof(HashSet<T>));
+            CopyValue(Fields<T>.comparer, original, clone);
+
+            if (original.Count == 0)
+            {
+                Fields<T>.freeList.SetValue(clone, -1);
+            }
+            else
+            {
+                Fields<T>.count.SetValue(clone, original.Count);
+                CloneValue(Fields<T>.buckets, original, clone);
+                CloneValue(Fields<T>.slots, original, clone);
+                CopyValue(Fields<T>.freeList, original, clone);
+                CopyValue(Fields<T>.lastIndex, original, clone);
+                CopyValue(Fields<T>.version, original, clone);
+            }
+
+            return clone;
+        }
+
+        static void CopyValue<T>(FieldInfo field, HashSet<T> source, HashSet<T> target)
+        {
+            field.SetValue(target, field.GetValue(source));
+        }
+
+        static void CloneValue<T>(FieldInfo field, HashSet<T> source, HashSet<T> target)
+        {
+            field.SetValue(target, ((Array)field.GetValue(source)).Clone());
+        }
+
+        static class Fields<T>
+        {
+            public static readonly FieldInfo freeList = GetFieldInfo("m_freeList");
+            public static readonly FieldInfo buckets = GetFieldInfo("m_buckets");
+            public static readonly FieldInfo slots = GetFieldInfo("m_slots");
+            public static readonly FieldInfo count = GetFieldInfo("m_count");
+            public static readonly FieldInfo lastIndex = GetFieldInfo("m_lastIndex");
+            public static readonly FieldInfo version = GetFieldInfo("m_version");
+            public static readonly FieldInfo comparer = GetFieldInfo("m_comparer");
+
+            static FieldInfo GetFieldInfo(string name)
+            {
+                return typeof(HashSet<T>).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+            }
+        }*/
+        //结束复制hashset
+
+
+
     }
+
 }

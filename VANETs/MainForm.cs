@@ -26,6 +26,7 @@ namespace VANETs
             //Console.Out.WriteLine("Program Starts...");
             Global global = Global.getInstance();
             VANETOrganization.GenerateNodes();
+            VANETOrganization.GenerateOrganizations();
             VANETOrganization.GenerateNetworks();
             VANETOrganization.GenerateNodePositionsAllRandom();
             EventManager handler = new EventManager();

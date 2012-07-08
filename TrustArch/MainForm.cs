@@ -37,6 +37,7 @@ namespace TrustArch
             catch (Exception ex)
             {
                 MessageBox.Show(ex.Message);
+                Console.WriteLine(ex.StackTrace);
             }
 
             global.mainForm = (MainForm)this;

@@ -40,7 +40,15 @@ namespace AdHocBaseApp
             foreach (Reader reader in global.readers)
             {
                 if (reader.SendBeaconFlag)
-                    AddEvent(new Event(scheduler.currentTime, EventType.SND_BCN, reader, null));
+                {
+                    float nextBeacon = 0;
+                    if (reader.IsGateway)
+                        nextBeacon = 0;
+                    else
+                        nextBeacon = (float)(Utility.P_Rand(10 * (global.beaconWarmingInterval)) / 10);//0.5是为了设定最小值
+                    //float nextBeacon = (float)(Utility.U_Rand(10 * global.beaconInterval) / 10);
+                    AddEvent(new Event(scheduler.currentTime + nextBeacon, EventType.SND_BCN, reader, null));
+                }
             }
 
             string line = null;

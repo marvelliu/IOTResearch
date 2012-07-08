@@ -82,7 +82,7 @@ namespace HeterogeneousForward
                     while (tmpTags.Count < tagNum)
                     {
                         int t = (int)Utility.U_Rand(global.tagNameNum);
-                        if (((HFReader)snode).IsAllowedTags((uint)1 << t) && !tmpTags.Contains(t))
+                        if (((SWReader)snode).IsAllowedTags((uint)1 << t) && !tmpTags.Contains(t))
                             tmpTags.Add(t);
                     }
 
@@ -115,7 +115,7 @@ namespace HeterogeneousForward
                     do
                     {
                         snode = froms[Utility.Rand(froms.Length)];
-                    } while (((HFReader)snode).IsAllowedAllTags());
+                    } while (((SWReader)snode).IsAllowedAllTags());
                     Node dnode = snode;
 
                     int orgId = ((Reader)snode).OrgId;
@@ -176,7 +176,7 @@ namespace HeterogeneousForward
                     while (tmpTags.Count < num)
                     {
                         int t = Utility.Rand(global.tagNameNum);
-                        if (((HFReader)snode).IsAllowedTags((uint)1 << t) && !tmpTags.Contains(t))
+                        if (((SWReader)snode).IsAllowedTags((uint)1 << t) && !tmpTags.Contains(t))
                             tmpTags.Add(t);
                     }
                     string tags = "";

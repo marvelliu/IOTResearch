@@ -81,10 +81,9 @@ namespace AdHocBaseApp
             if (!(obj is Event))
                 throw new ArgumentException("Argument not a evnet", "right");
             Event e = (Event)obj;
-            float w = this.time - e.Time;
-            if (w > 0)
+            if (this.time > e.Time)
                 return 1;
-            else if (w < 0)
+            else if (this.time < e.Time)
                 return -1;
             else
                 return 0;

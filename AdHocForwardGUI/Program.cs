@@ -26,7 +26,7 @@ namespace AdHocBaseApp
 
             if (args.Length != 0)
                 ParseArgs(args);
-            
+                        
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new MainForm());

@@ -55,6 +55,7 @@
     <Compile Include="BaseForm.Designer.cs">
       <DependentUpon>BaseForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="Dijkstra.cs" />
     <Compile Include="EventGenerator.cs" />
     <Compile Include="Event.cs" />
     <Compile Include="EventManager.cs" />

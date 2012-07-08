@@ -124,8 +124,9 @@ namespace AdHocBaseApp
                 return "wrong type";
         }
 
-        public virtual void SendPacketDirectly(float time, Packet pkg)
+        public virtual bool SendPacketDirectly(float time, Packet pkg)
         {
+            return true;
         }
 
         public virtual void Recv(Packet pkg)

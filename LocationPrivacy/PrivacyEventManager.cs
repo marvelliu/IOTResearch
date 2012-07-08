@@ -34,14 +34,14 @@ namespace LocationPrivacy
                 int h = int.Parse(array[3].Trim());
                 float time = float.Parse(array[4].Trim());
                 int random = int.Parse(array[5].Trim());
-                if (k >0 && time>=0)
-                    Event.AddEvent(new Event(time, EventType.K_ANONY, node, new GroupArgs(k, h,random)));
+                if (k > 0 && time >= 0)
+                    Event.AddEvent(new Event(time, EventType.K_ANONY, node, new GroupArgs(k, h, random)));
                 else
-                    throw new Exception("Bad k value or time: " + array[2]+" "+ array[3]);
+                    throw new Exception("Bad k value or time: " + array[2] + " " + array[3]);
             }
             else
             {
-                throw new Exception("Unknown event type: " + array[0]);
+                base.ParseEventArgs(array);
             }
         }
     }

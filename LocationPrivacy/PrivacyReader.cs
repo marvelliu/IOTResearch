@@ -852,7 +852,7 @@ namespace LocationPrivacy
             }*/
 
             HashSet<int> result = new HashSet<int>();
-            Utility.CopyHashIntSet(result, candidates);
+            Utility.CopyHashSet(result, candidates);
 
             foreach (int node in candidates)
             {
@@ -1685,7 +1685,7 @@ namespace LocationPrivacy
                         if (!this.AnonGroups.subUnavailAnonyNodes.ContainsKey(ckey))
                             this.AnonGroups.subUnavailAnonyNodes.Add(ckey, new HashSet<int>());
 
-                        Utility.AddHashIntSet(this.AnonGroups.subUnavailAnonyNodes[ckey], subnodes);
+                        Utility.AddHashSet(this.AnonGroups.subUnavailAnonyNodes[ckey], subnodes);
                         SendSetGroup(rootId, rootId, k, c, this.AnonGroups.group[k], subnodes);//这里rootId和origId应该是一样的
 
                         //TODO subUnavailAnonyNodeCounts在节点消失的时候应该减少的
@@ -1740,11 +1740,11 @@ namespace LocationPrivacy
                 {
                     HashSet<int> tmp = new HashSet<int>();
                     string newgroupident = rootId + "-" + origId + "-" + k;
-                    Utility.CopyHashIntSet(tmp, group);
+                    Utility.CopyHashSet(tmp, group);
                     string key1 = pkg.Src+"-"+k;
                     if(!this.AnonGroups.subUnavailAnonyNodes.ContainsKey(key1))
                         this.AnonGroups.subUnavailAnonyNodes.Add(key1, new HashSet<int>());
-                    Utility.AddHashIntSet(this.AnonGroups.subUnavailAnonyNodes[key1], group);
+                    Utility.AddHashSet(this.AnonGroups.subUnavailAnonyNodes[key1], group);
                     if (subTreeInfo.parent != null)
                         SendSetGroup(rootId, origId, k, subTreeInfo.parent.Id, group, null);
                     return;
@@ -1763,7 +1763,7 @@ namespace LocationPrivacy
             if (subnode.Contains(this.Id) && !this.AnonGroups.group.ContainsKey(k))
             {
                 this.AnonGroups.group.Add(k, new HashSet<int>());
-                Utility.CopyHashIntSet(this.AnonGroups.group[k], group);
+                Utility.CopyHashSet(this.AnonGroups.group[k], group);
                 Console.WriteLine("Reader{0} is set to {1}-group", Id, k);
             }
 
@@ -1785,7 +1785,7 @@ namespace LocationPrivacy
 
                 string ckey = c + "-" + k;
                 if (this.AnonGroups.subUnavailAnonyNodes.ContainsKey(ckey))
-                    Utility.AddHashIntSet(this.AnonGroups.subUnavailAnonyNodes[ckey], subnode);
+                    Utility.AddHashSet(this.AnonGroups.subUnavailAnonyNodes[ckey], subnode);
             }
         }
 

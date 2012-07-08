@@ -37,6 +37,7 @@ namespace MaliciousOrganizationDetection
             catch (Exception ex)
             {
                 MessageBox.Show(ex.Message);
+                Console.WriteLine(ex.StackTrace);
             }
 
             global.mainForm = (MainForm)this;
@@ -177,7 +178,8 @@ namespace MaliciousOrganizationDetection
             string filename = f.filename;
             EventGenerator generator = new EventGenerator();
 
-            File.Copy(global.eventsFileName, filename, true);
+            if(global.eventsFileName != filename)
+                File.Copy(global.eventsFileName, filename, true);
             if (clear)
                 generator.ClearEvents(filename, "MOV");
             generator.GenerateRandomObjectMotionEvents(true, nodeSpeed, eventCount, nodeCount, NodeType.READER, filename);

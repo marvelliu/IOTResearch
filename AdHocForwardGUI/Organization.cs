@@ -36,6 +36,7 @@ namespace AdHocBaseApp
         public int[] PubKey;
         public int CAId;
         public int[] CAPubKey;
+        public int authedRSUId;
         public Certificate(int id)
         {
             this.Id = id;
@@ -55,9 +56,14 @@ namespace AdHocBaseApp
 
         public bool IsValid()
         {
-            if (CAId != RootCA.CAId || CAPubKey != RootCA.CAPubKey)
+            if (CAId != RootCA.CAId)
                 return false;
-            else if (Id == RootCA.CAId && PubKey[0] == (int)NodeType.CA && PubKey[1] == RootCA.CAId) //CA
+            for (int i = 0; i < CAPubKey.Length; i++)
+            {
+                if(CAPubKey[i] != RootCA.CAPubKey[i])
+                    return false;
+            }
+            if (Id == RootCA.CAId && PubKey[0] == (int)NodeType.CA && PubKey[1] == RootCA.CAId) //CA
                 return true;
             else if (this.PubKey[1] == this.Id && (this.PubKey[0] == (int)NodeType.OBJECT || this.PubKey[0] == (int)NodeType.OBJECT))
                 return true;
@@ -280,14 +286,14 @@ namespace AdHocBaseApp
 
 
 
-        public override void SendPacketDirectly(float time, Packet pkg)
+        public override bool SendPacketDirectly(float time, Packet pkg)
         {
             pkg.Prev = Id;
             Console.WriteLine("{0:F4} [{1}] {2}{3} sends to {4}{5}", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.NextType, (pkg.Next == -1 ? "all" : pkg.Next.ToString()));
 
             float recv_time = global.serverProcessDelay + global.internetDelay;
             if (pkg.Next == -1) //Broadcast
-                return;//No such a case.
+                return true;//No such a case.
             else
             {
                 Node node = null;
@@ -313,6 +319,7 @@ namespace AdHocBaseApp
                     new Event(time + recv_time, EventType.RECV,
                         node, pkg));
             }
+            return true;
         }
     }
 }

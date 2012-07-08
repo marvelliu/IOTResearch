@@ -49,6 +49,8 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="VANETComparision.cs" />
+    <Compile Include="VANETGlobal.cs" />
     <Compile Include="VANETObjectNode.cs" />
     <Compile Include="VANETReader.cs" />
     <Compile Include="VANETScheduler.cs" />

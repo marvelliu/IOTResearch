@@ -52,7 +52,7 @@ namespace AdHocBaseApp
             return list;
         }
 
-        public override void SendPacketDirectly(float time, Packet pkg)
+        public override bool SendPacketDirectly(float time, Packet pkg)
         {
             float recv_time = 0;
             pkg.Prev = Id;
@@ -64,7 +64,7 @@ namespace AdHocBaseApp
             this.sentPacketCount++;
 
             if (pkg.Next == -1) //Broadcast
-                return;//No such a case.
+                return true;//No such a case.
             else
             {
                 pkg.SrcSenderSeq = this.sentPacketCount;
@@ -99,6 +99,7 @@ namespace AdHocBaseApp
                         break;
                 }
             }
+            return true;
         }
 
         public override void Recv(Packet pkg)

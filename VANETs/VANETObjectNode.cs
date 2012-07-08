@@ -48,15 +48,16 @@ namespace VANETs
 
             switch (pkg.Type)
             {
-                case PacketType.DATA_AVAIL: 
-                    Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev);
+                case PacketType.CERTIFICATE_OK:
+                case PacketType.DATA_AVAIL:
+                    Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5} time:{6:F4}", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev, (float)pkg.Data);
                     this.lastNearReader = this.global.readers[pkg.Src];
                     this.lastNearReaderTime = scheduler.currentTime;
                     foreach (Packet p in this.cachePackets)
                         SendData(p);
                     break;
-                case PacketType.CERTIFICATE:
-                    Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev);
+                case PacketType.CERTIFICATE_REQ:
+                    Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5} time:{6:F4}", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev, (float)pkg.Data);
                     RecvCertificate(pkg);
                     break;
                 default:
@@ -68,8 +69,9 @@ namespace VANETs
 
         public void RecvCertificate(Packet pkg)
         {
-            Packet pkg1 = new Packet(this, global.readers[pkg.Src], PacketType.CERTIFICATE);
+            Packet pkg1 = new Packet(this, global.readers[pkg.Src], PacketType.CERTIFICATE_REP);
             pkg1.VANETCertificate = new Certificate(this.Id, this.Cert.PubKey, this.Cert.CAId, this.Cert.CAPubKey);
+            pkg1.Data = pkg.Data;
             SendPacketDirectly(scheduler.currentTime, pkg1);
         }
     }

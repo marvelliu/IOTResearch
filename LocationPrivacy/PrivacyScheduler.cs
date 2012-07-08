@@ -8,6 +8,11 @@ namespace LocationPrivacy
 {
     class PrivacyScheduler:Scheduler
     {
+        new public static Scheduler ProduceScheduler()
+        {
+            return new PrivacyScheduler();
+        }
+
         public override void ProcessEvent(Node node, Event e)
         {
             PrivacyReader reader = (PrivacyReader)node;

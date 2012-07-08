@@ -97,85 +97,6 @@ namespace NewTrustArch
                 this.assignedMonitorOrgs.Remove(org);
         }
 
-        public override void Recv(AdHocBaseApp.Packet pkg)
-        {
-            if (pkg.PrevType == NodeType.OBJECT || pkg.PrevType == NodeType.READER)
-            {
-                Node node = Node.getNode(pkg.Prev, pkg.PrevType);
-                double dist = pkg.PrevType == NodeType.OBJECT ? global.objectMaxDist : global.nodeMaxDist;
-                if (Utility.Distance(this, (MobileNode)node) > dist)
-                {
-                    if (pkg.Next == Id)
-                        Console.WriteLine("{0:F4} [{1}] {2}{3} Drop data of {4}{5} due to out of space.", scheduler.currentTime, pkg.Type, this.type, this.Id, node.type, node.Id);
-                    CheckPacketCount(pkg);
-                    return;
-                }
-            }
-            //Check the Phenomemon
-            if (pkg.PrevType == NodeType.READER)
-                AddReceivePacketPhenomemon(pkg);
-            if (pkg.PrevType == NodeType.OBJECT)
-                AddReceiveObjectPhenomemon(pkg);
-            //TODO: Other type
-
-            if ((pkg.Next != Id && pkg.Next != BroadcastNode.Node.Id) || pkg.NextType != NodeType.READER)
-                return;
-            //I send the packet myself, ignore
-            if (pkg.Prev == Id && pkg.PrevType == type)
-                return;
-
-            //中间节点恶意抛弃？
-            if (pkg.PrevType == NodeType.OBJECT)
-            {
-                if (readerType == ReaderType.DROP_PACKET && pkg.Dst != Id)
-                {
-                    if (pkg.Type == PacketType.DATA || pkg.Type == PacketType.COMMAND)
-                    {
-                        Console.WriteLine("{0:F4} [{1}] {2}{3} Drop data of {4}{5} due to bad node. packet ident:{6}---{7}", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev, pkg.PrevSenderSeq, pkg.SrcSenderSeq);
-                        if (pkg.PrevType == NodeType.READER)
-                            CheckPacketCount(pkg);
-                        return;
-                    }
-                }
-            }
-
-            switch (pkg.Type)
-            {
-                //Readers
-                case PacketType.BEACON:
-                    //Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}", scheduler.CurrentTime, pkg.Type, this.type, this.id, pkg.PrevType, pkg.Prev);
-                    if (pkg.PrevType == NodeType.READER)
-                        CheckPacketCount(pkg);
-                    RecvBeacon(pkg);
-                    break;
-                //Objects
-                case PacketType.TAG_HEADER:
-                    Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev);
-                    if (pkg.PrevType == NodeType.READER)
-                        CheckPacketCount(pkg);
-                    RecvTagHeaderResponse(pkg);
-                    break;
-                case PacketType.AUTHORIZATION:
-                    Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev);
-                    if (pkg.PrevType == NodeType.READER)
-                        CheckPacketCount(pkg);
-                    RecvAuthorization(pkg);
-                    break;
-                case PacketType.COMMAND:
-                    Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev);
-                    if (pkg.PrevType == NodeType.READER)
-                        CheckPacketCount(pkg);
-                    RecvCommand(pkg);
-                    break;
-                //Some codes are hided in the base class.
-                default:
-                    base.Recv(pkg);
-                    return;
-            }
-            pkg.TTL -= 1;
-            if (pkg.TTL < 0)
-                Drop(pkg);
-        }
 
 
         override public void SendBeacon(float time)
@@ -816,6 +737,79 @@ namespace NewTrustArch
                     }
                 }
             }
+        }
+
+
+        public override void ProcessPacket(Packet pkg)
+        {
+            if (pkg.PrevType == NodeType.OBJECT || pkg.PrevType == NodeType.READER)
+            {
+                Node node = Node.getNode(pkg.Prev, pkg.PrevType);
+                double dist = pkg.PrevType == NodeType.OBJECT ? global.objectMaxDist : global.nodeMaxDist;
+                if (Utility.Distance(this, (MobileNode)node) > dist)
+                {
+                    if (pkg.Next == Id)
+                        Console.WriteLine("{0:F4} [{1}] {2}{3} Drop data of {4}{5} due to out of space.", scheduler.currentTime, pkg.Type, this.type, this.Id, node.type, node.Id);
+                    CheckPacketCount(pkg);
+                    return;
+                }
+            }
+            //Check the Phenomemon
+            if (pkg.PrevType == NodeType.READER)
+                AddReceivePacketPhenomemon(pkg);
+            if (pkg.PrevType == NodeType.OBJECT)
+                AddReceiveObjectPhenomemon(pkg);
+            //TODO: Other type
+
+            if ((pkg.Next != Id && pkg.Next != BroadcastNode.Node.Id) || pkg.NextType != NodeType.READER)
+                return;
+            //I send the packet myself, ignore
+            if (pkg.Prev == Id && pkg.PrevType == type)
+                return;
+
+            //中间节点恶意抛弃？
+            if (pkg.PrevType == NodeType.OBJECT)
+            {
+                if (readerType == ReaderType.DROP_PACKET && pkg.Dst != Id)
+                {
+                    if (pkg.Type == PacketType.DATA || pkg.Type == PacketType.COMMAND)
+                    {
+                        Console.WriteLine("{0:F4} [{1}] {2}{3} Drop data of {4}{5} due to bad node. packet ident:{6}---{7}", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev, pkg.PrevSenderSeq, pkg.SrcSenderSeq);
+                        if (pkg.PrevType == NodeType.READER)
+                            CheckPacketCount(pkg);
+                        return;
+                    }
+                }
+            }
+
+            switch (pkg.Type)
+            {
+                //Readers
+                case PacketType.BEACON:
+                    //Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}", scheduler.CurrentTime, pkg.Type, this.type, this.id, pkg.PrevType, pkg.Prev);
+                   RecvBeacon(pkg);
+                   break;
+                //Objects
+                case PacketType.TAG_HEADER:
+                    Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev);
+                    RecvTagHeaderResponse(pkg);
+                    break;
+                case PacketType.AUTHORIZATION:
+                    Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev);
+                    RecvAuthorization(pkg);
+                    break;
+                case PacketType.COMMAND:
+                    Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev);
+                    RecvCommand(pkg);
+                    break;
+                //Some codes are hided in the base class.
+                default:
+                    base.ProcessPacket(pkg);
+                    return;
+            }
+            pkg.TTL -= 1;
+            if (pkg.TTL < 0)
+                Drop(pkg);
         }
 
 

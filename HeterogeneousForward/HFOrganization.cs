@@ -32,35 +32,42 @@ namespace HeterogeneousForward
                 global.readers[i].Y = 10000;
             }
 
-            //机构0的候选节点
-            for (int i = 0; i < global.orgs[0].nodes.Count; i++)
+            //机构0, 1的候选节点
+            for (int p = 0; p < 2; p++)
             {
-                double x = 0, y = 0, mindist = 9999, retry = 0;
-                //double maxdist = 0;
-                do
+                for (int i = 0; i < global.orgs[p].nodes.Count; i++)
                 {
-                    mindist = 9999;
-                    //maxdist = 0;
-                    x = Utility.U_Rand(global.layoutX);
-                    y = Utility.U_Rand(global.layoutY);
-                    global.orgs[0].nodes[i].X = x;
-                    global.orgs[0].nodes[i].Y = y;
-
-                    for (int j = 0; j < i; j++)
+                    double x = 0, y = 0, mindist = 9999, retry = 0;
+                    //double maxdist = 0;
+                    do
                     {
-                        double d = Utility.Distance(global.orgs[0].nodes[j], global.orgs[0].nodes[i]);
-                        if (d < mindist)
-                            mindist = d;
-                        //if (d > maxdist)
-                        //    maxdist = d;
-                    }
-                    retry++;
+                        mindist = 9999;
+                        //maxdist = 0;
+                        x = Utility.U_Rand(global.layoutX);
+                        y = Utility.U_Rand(global.layoutY);
+                        global.orgs[p].nodes[i].X = x;
+                        global.orgs[p].nodes[i].Y = y;
 
-                } while (i > 0 && mindist < 450 && retry < 10);
+                        for (int s = 0; s < p; s++)
+                        {
+                            int t = (s == p) ? i : global.orgs[s].nodes.Count;
+                            for (int j = 0; j < t; j++)
+                            {
+                                double d = Utility.Distance(global.orgs[s].nodes[j], global.orgs[p].nodes[i]);
+                                if (d < mindist)
+                                    mindist = d;
+                                //if (d > maxdist)
+                                //    maxdist = d;
+                            }
+                        }
+                        retry++;
+
+                    } while (i > 0 && mindist < 200 && retry < 20);
+                }
             }
 
 
-            for (int i = 1; i < global.orgs.Length; i++)
+            for (int i = 2; i < global.orgs.Length; i++)
             {
                 for (int j = 0; j < global.orgs[i].nodes.Count; j++)
                 {

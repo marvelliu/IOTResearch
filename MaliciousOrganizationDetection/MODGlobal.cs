@@ -11,6 +11,7 @@ namespace MaliciousOrganizationDetection
         Native = 0,
         Game,
         OrgGame,
+        CoOrgGame,
     }
     public class MODGlobal:Global
     {
@@ -30,10 +31,10 @@ namespace MaliciousOrganizationDetection
         public float checkNodeTypeTimeout = 16;
 
         public double totalPacketThreahold = 1000;
-        public double nodeSpeedThreahold = 15;
+        public double nodeSpeedThreahold = 20;
         public double sendPacketTimeout = 1.5f;
 
-        public double NormalBelief = 0.3;
+        public double NormalBelief = 0.4;
         public double NormalPlausibility = 0.7;
 
         //public DeduceMethod deduceMethod = DeduceMethod.Native;
@@ -41,8 +42,10 @@ namespace MaliciousOrganizationDetection
         public DeduceMethod Step2DeduceMethod = DeduceMethod.OrgGame;
         public DeduceMethod Step1DeduceMethod = DeduceMethod.OrgGame;
 
+        public bool Interactive = false;
 
-        
+
+
         //对于恶意的报告节点所得
         //由于使用博弈的必定是恶意节点，故我本身是恶意节点
         //恶意节点的收益有两部分，一部分是信誉值的变化(+0.2,-0.3)，另一部分是恶意行为所带来的收益(0.5,0)
@@ -87,7 +90,7 @@ namespace MaliciousOrganizationDetection
         public int BufSize = 2048;
 
 
-        public double pInitDrop = 0.5f;
+        public double pInitDrop = 0.5f; //此处真实设置在机构比例处设置
         public double pInitNormal = 0.6f;
         public int pInitIterationNormal = 1;
         public int pInitIterationMalicious = 1;
@@ -98,9 +101,11 @@ namespace MaliciousOrganizationDetection
         public double RewardFactor = 1.0f;
 
         //某机构报告与自己最大的差异，超过则可疑
-        public double MaxReportDistance = 0.5f;
+        public double MaxReportDistance = 0.10f;
+        //某个机构内部的一致性
+        public double MinReportVariance = 0.12f;
         //机构之间一致性最大值，超过则可能出现恶意机构
-        public double MaxTotalOrgVariance = 0.5f;
+        public double MaxTotalOrgVariance = 0.1f;
 
         public int MaxSuspectedCount = 3;
 
@@ -111,6 +116,10 @@ namespace MaliciousOrganizationDetection
         public double VarianceBase = 1.1;
         public double HistoryVSDBase = 6f;
 
+
+        //默认情况下恶意节点是否抛弃数据包
+        public bool DropData = false;
+
         public int MaxHistoryCount = 5;
 
         //用最小二乘法预测节点方差，如果超过阈值则认为可能是有问题的
@@ -120,6 +129,13 @@ namespace MaliciousOrganizationDetection
         public int maxCountPeriod = 5;
 
         public int MaxReportCount = 15;
+
+
+        //每个时期只能判断一个恶意事件
+        public string currentPkgIdent = "";
+        public double currentPkgIdentUpdate = -10;
+
+        public double ReportMinDist = 0.1f;
 
         //为了缩小范围，只检测特定的节点，如检测节点1，则会考察节点1发送到其他节点时，其他节点是否drop
         public HashSet<int> monitoredNodes = new HashSet<int>();
@@ -160,6 +176,32 @@ namespace MaliciousOrganizationDetection
             else if (v[0] == "HistoryVSDBase")
             {
                 HistoryVSDBase = double.Parse(v[1]);
+            }
+            else if (v[0] == "DropData")
+            {
+                DropData = bool.Parse(v[1]);
+            }
+            else if (v[0] == "Interactive")
+            {
+                Interactive = bool.Parse(v[1]);
+            }
+            else if (v[0] == "org_func")
+            {
+                if (v[1] == "Poisson")
+                    orgGenType = OrgGenType.Poisson;
+                else if (v[1] == "AVG")
+                    orgGenType = OrgGenType.AVG;
+                else if (v[1] == "CUS1")
+                {
+                    orgGenType = OrgGenType.CUS1;
+                    orgRatio = new double[orgNum];
+
+                    for (int i = 0; i < v.Length - 2; i++)
+                    {
+                        double ratio = double.Parse(v[i + 2]);
+                        orgRatio[i] = ratio;
+                    }
+                }
             }
             else
             {

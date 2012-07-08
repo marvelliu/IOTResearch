@@ -48,6 +48,12 @@ namespace AdHocBaseApp
             this.endTime = end;
         }
 
+        //在模拟器结束的时候处理的事件
+        public virtual void EndProcess()
+        {
+            Console.WriteLine("Simulation ends");
+        }
+
         public void Start()
         {
             Console.WriteLine("Simulation start");
@@ -59,7 +65,7 @@ namespace AdHocBaseApp
         {
             if (thread != null && thread.IsAlive)
             {
-                Console.WriteLine("Simulation end");
+                EndProcess();
                 thread.Abort();
             }
         }
@@ -110,7 +116,7 @@ namespace AdHocBaseApp
                     break;
                 case EventType.SND_DATA:
                     Packet pkg = (Packet)e.Obj;
-                    if (pkg.SrcSenderSeq < 0)//未定该数据包的id
+                    if (pkg.SrcSenderSeq < 0 && node.type == NodeType.READER)//未定该数据包的id
                         ((Reader)node).initPacketSeq(pkg);
                     node.SendData(pkg);
                     break;

@@ -16,11 +16,15 @@ namespace VANETs
         static void Main(string[] args)
         {
 
+            GlobalProducer.globalConstructor = VANETGlobal.ProduceGlobal;
+            SchedulerProducer.schedulerlConstructor = VANETScheduler.ProduceScheduler;
             Global global = Global.getInstance();
 
             global.objectNodeConstructor = VANETObjectNode.ProduceObjectNode;
             global.readerConstructor = VANETReader.ProduceReader;
+            global.organizationConstructor = VANETOrganization.ProduceOrganization;
             global.serverConstructor = Server.getInstance;
+
 
 
             ParseArgs(args);

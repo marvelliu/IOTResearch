@@ -37,8 +37,8 @@ namespace HeterogeneousForward
                     if (t1.Length ==0 ||
                         (t1.Length == 1 && t1[0] == "-1"))
                     {
-                        HFReader r = (HFReader)src;
-                        TagEntity t = r.CaculateTagEntity(r.forwardStrategies);
+                        SWReader r = (SWReader)src;
+                        TagEntity t = r.CalculateTagEntity(r.forwardStrategies);
                         tags = t.allowTags;
                         for (int i = 0; i < global.tagNameNum; i++)
                         {

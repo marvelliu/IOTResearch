@@ -6,11 +6,11 @@ using AdHocBaseApp;
 
 namespace HeterogeneousForward
 {
-    class HFNeighbor:Neighbor
+    class SWNeighbor:Neighbor
     {
         public ForwardStrategy[] ClaimedForwardStrategy;
 
-        public HFNeighbor(Reader node)
+        public SWNeighbor(Reader node)
             : base(node)
         {
             this.ClaimedForwardStrategy = null;

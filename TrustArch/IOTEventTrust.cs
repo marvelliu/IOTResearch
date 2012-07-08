@@ -359,6 +359,7 @@ namespace TrustArch
                 a4 = ConditionHappened(observedPhenomemons, IOTPhenomemonType.BANDWIDTH_BUSY, selfId, p.start - global.checkPhenomemonTimeout, Scheduler.getInstance().currentTime);
                 //如果对带宽占用没有知识，则正反都设置为未知。
                 a5 = 0.9 - a4;
+                //这里是否可以用平均值Average？
                 a6 = Utility.Max(new double[]{
                     ConditionHappened(observedPhenomemons, IOTPhenomemonType.MOVE_FAST, node, p.start - global.checkPhenomemonTimeout, Scheduler.getInstance().currentTime),
                     ConditionHappened(observedPhenomemons, IOTPhenomemonType.MOVE_FAST, p.pkg.Prev, p.start - global.checkPhenomemonTimeout, Scheduler.getInstance().currentTime),
@@ -369,6 +370,8 @@ namespace TrustArch
                 //另一个是，看源节点发送的数据是否能被被观测节点收到
                 //a19 = Math.Max(FarDistanceLikehood(selfId, node, p.pkg.DstType==NodeType.OBJECT),
                 //    FarDistanceLikehood(selfId, p.pkg.Prev, p.pkg.PrevType == NodeType.OBJECT));
+
+                //TODO,这里是不是有问题，false和true，在md项目中已修正
                 if(p.pkg.DstType == NodeType.OBJECT && selfNode.NearbyObjectCache.ContainsKey(p.pkg.Dst))
                     a19 = FarDistanceLikehood(selfId, node, false);
                 else

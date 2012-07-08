@@ -10,29 +10,37 @@ namespace VANETs
     {
         public int id;
         public int hops;
+        public int nbs;
         public Certificate cert;
-        public RSUEntity(int id, int hops, Certificate cert)
+        public bool isWired;
+
+        public RSUEntity(int id, int hops, int nbs, Certificate cert, bool isWired)
         {
             this.id = id;
             this.hops = hops;
+            this.nbs = nbs;
             this.cert = cert;
+            this.isWired = isWired;
         }
     }
 
     public class CertificateCache
     {
         public Certificate cert;
-        public float time;
-        public CertificateCache(Certificate cert, float time)
+        //为了不频繁更新，设置为整型数
+        public int time;
+        public int authenticatedRSUId;
+        public CertificateCache(Certificate cert, int time, int authenticatedRSUId)
         {
             this.cert = cert;
             this.time = time;
+            this.authenticatedRSUId = authenticatedRSUId;
         }
-    }
+    }    
 
     public class VANETReader : Reader
     {
-        private Global global;
+        private VANETGlobal global;
 
         new public static VANETReader ProduceReader(int id, int org)
         {
@@ -42,7 +50,7 @@ namespace VANETs
         public VANETReader(int id, int org)
             : base(id, org)
         {
-            this.global = Global.getInstance();
+            this.global = (VANETGlobal)Global.getInstance();
             int[] key = new int[32];
             key[0] = (int)NodeType.READER;
             key[1] = id;
@@ -51,7 +59,7 @@ namespace VANETs
             this.RSUCache = new Dictionary<int, RSUEntity>();
             this.CertificateCache = new Dictionary<string, CertificateCache>();
             this.NeighborBackbones = new Dictionary<int, int>();
-            this.wiredNodeCache = new List<int>();
+            this.pendingCerterficatingObjects = new Dictionary<int, float>();
         }
 
         public bool IsWired = false;
@@ -63,91 +71,27 @@ namespace VANETs
         private float lastSentRSUJoinRequest = -1;
         private Dictionary<string, CertificateCache> CertificateCache;
         public Dictionary<int, int> NeighborBackbones;
-        
-        private List<int> wiredNodeCache;
+        public Dictionary<int, float> pendingCerterficatingObjects;
+
+        HashSet<int> prefetchingCertIds = new HashSet<int>();
 
 
-
-        public override void Recv(AdHocBaseApp.Packet pkg)
-        {
-            if (pkg.PrevType == NodeType.OBJECT || pkg.PrevType == NodeType.READER)
-            {
-                Node node = Node.getNode(pkg.Prev, pkg.PrevType);
-                if (Utility.Distance(this, (MobileNode)node) > global.nodeMaxDist)
-                {
-                    if (pkg.Next == Id)
-                        Console.WriteLine("{0:F4} [{1}] {2}{3} Drop data of {4}{5} due to out of space.", scheduler.currentTime, pkg.Type, this.type, this.Id, node.type, node.Id);
-                    CheckPacketCount(pkg);
-                    return;
-                }
-            }
-
-            if (pkg.Next != Id || pkg.NextType != NodeType.READER)
-                return;
-
-            //Self, ignore
-            if ((pkg.Next != Id && pkg.Next != BroadcastNode.Node.Id) || pkg.NextType != NodeType.READER)
-                return;
-
-            switch (pkg.Type)
-            {
-                case PacketType.BEACON:
-                    Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev);
-                    if (pkg.PrevType == NodeType.READER)
-                        CheckPacketCount(pkg);
-                    RecvBeacon(pkg);
-                    break;
-                case PacketType.CERTIFICATE:
-                    Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev);
-                    if (pkg.PrevType == NodeType.READER)
-                        CheckPacketCount(pkg);
-                    RecvCertificate(pkg);
-                    break;
-                case PacketType.RSU_JOIN:
-                    Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev);
-                    if (pkg.PrevType == NodeType.READER)
-                        CheckPacketCount(pkg);
-                    RecvRSUJoin(pkg);
-                    break;
-                case PacketType.RSU_NEW_BACKBONE_REQUEST:
-                    Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev);
-                    if (pkg.PrevType == NodeType.READER)
-                        CheckPacketCount(pkg);
-                    RecvNewBackboneRequest(pkg);
-                    break;
-                case PacketType.RSU_NEW_BACKBONE_RESPONSE:
-                    Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev);
-                    if (pkg.PrevType == NodeType.READER)
-                        CheckPacketCount(pkg);
-                    RecvNewBackboneResponse(pkg);
-                    break;
-                case PacketType.RSU_CA_FORWARD:
-                    Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev);
-                    if (pkg.PrevType == NodeType.READER)
-                        CheckPacketCount(pkg);
-                    RecvCertificateForward(pkg);
-                    break;
-                //Some codes are hided in the base class.
-                default:
-                    base.Recv(pkg);
-                    return;
-            }
-            pkg.TTL -= 1;
-            if (pkg.TTL < 0)
-                Drop(pkg);
-        }
 
         public void RecvNewBackboneRequest(Packet pkg)
         {
+            if (pkg.Next != this.Id)
+                return;
             if (pkg.Dst == Id)
             {
                 VANETNewBackboneRequestField req = pkg.VANETNewBbReq;
-                if (req.backboneCert.CAId != Certificate.RootCA.CAId || req.backboneCert.CAPubKey != Certificate.RootCA.CAPubKey)
+                //if (req.backboneCert.CAId != Certificate.RootCA.CAId || req.backboneCert.CAPubKey != Certificate.RootCA.CAPubKey)
+                if (req.backboneCert.CAId != Certificate.RootCA.CAId)
                 {
                     Console.WriteLine("Auth error! NewBackboneRequest CA is ({0},{1})", req.backboneCert.CAId, req.backboneCert.CAPubKey);
                     return;
                 }
 
+                Console.WriteLine("{0:F4} [{1}] {2}{3} is selected as a new gateway", scheduler.currentTime, "NEW_NETWORK", this.type, this.Id);
                 this.IsGateway = true;
                 VANETServer server = VANETServer.getInstance();
                 server.BackboneNodeDB.Add(this);
@@ -156,7 +100,7 @@ namespace VANETs
 
                 Packet pkg1 = new Packet(this, global.readers[pkg.Src], PacketType.RSU_NEW_BACKBONE_RESPONSE);
                 pkg1.VANETNewBbRsp = new VANETNewBackboneResponseField(this.IssuedCertificate);
-                SendPacketDirectly(scheduler.currentTime, pkg1);
+                RoutePacket(pkg1);
                 return;
             }
             else
@@ -166,6 +110,9 @@ namespace VANETs
 
         public void RecvNewBackboneResponse(Packet pkg)
         {
+
+            if (pkg.Next != this.Id)
+                return;
             if (pkg.Dst == Id)
             {
                 //TODO
@@ -175,34 +122,81 @@ namespace VANETs
                 RoutePacket(pkg);
         }
 
+        public Reader GetNewBackboneHead()
+        {
+            //Reader r = global.readers[this.wiredNodeCache[count - 1]];
+            int index = 0;
+            List<RSUEntity> sortedWiredNodeCache = new List<RSUEntity>();
+            foreach (RSUEntity e in this.RSUCache.Values)
+            {
+                if (e.isWired)
+                    sortedWiredNodeCache.Add(e);
+            }
+            if (sortedWiredNodeCache.Count == 0)
+                return null;
+
+            if (global.vanetNetworkGenMethod == NetworkGenMethods.Random)
+                index = (int)Utility.U_Rand(sortedWiredNodeCache.Count);
+            else if (global.vanetNetworkGenMethod == NetworkGenMethods.MaxHops)
+            {
+                sortedWiredNodeCache.Sort(VANETComparision.HopComparior);
+                index = sortedWiredNodeCache.Count - 1;
+            }
+            else if (global.vanetNetworkGenMethod == NetworkGenMethods.HalfHops)
+            {
+                sortedWiredNodeCache.Sort(VANETComparision.HopComparior);
+                index = (sortedWiredNodeCache.Count - 1)/2;
+            }
+            else if (global.vanetNetworkGenMethod == NetworkGenMethods.MaxNeigbhors)
+            {
+                //选出2/3个hop最长的节点中邻居最大的节点
+                sortedWiredNodeCache.Sort(VANETComparision.HopComparior);
+                int mnb = sortedWiredNodeCache[sortedWiredNodeCache.Count - 1].nbs;
+                index = sortedWiredNodeCache.Count - 1;
+                for (int i = sortedWiredNodeCache.Count; i < sortedWiredNodeCache.Count*2/3; i--)
+                {
+                    if (mnb < sortedWiredNodeCache[i].nbs)
+                    {
+                        mnb = sortedWiredNodeCache[i].nbs;
+                        index = i;
+                    }
+                }
+                //sortedWiredNodeCache.Sort(VANETComparision.NeighborComparior);
+                //index = sortedWiredNodeCache.Count - 1;
+            }
+            return global.readers[sortedWiredNodeCache[index].id];
+        }
+
         public void RecvRSUJoin(Packet pkg)
         {
+            if (pkg.Next != this.Id)
+                return;
             if (pkg.Dst == Id)
             {
                 VANETRSUJoinField join = pkg.VANETRSUJoin;
                 if (this.RSUCache.ContainsKey(join.id))
                     return;
-                this.RSUCache.Add(join.id, new RSUEntity(join.id, join.hops, join.cert));
-                if (join.isWired)
-                    this.wiredNodeCache.Add(join.id); 
-                                    
+                this.RSUCache.Add(join.id, new RSUEntity(join.id, join.hops, join.nbs, join.cert, join.isWired));
+
                 if (this.RSUCache.Count > global.vanetNetworkSize)
                 {
                     if (this.lastSentRSUNewBackboneRequest > 0 && scheduler.currentTime - this.lastSentRSUNewBackboneRequest < 2)//timeout is 3.
                         return;
 
-                    int count = this.wiredNodeCache.Count;
-                    if (count == 0)
+                    Reader r = GetNewBackboneHead();
+                    if (r == null)
+                    {
+                        Console.WriteLine("Unable to find a new backbone head");
                         return;
-
-                    Reader r = global.readers[this.wiredNodeCache[count-1]];
-                    this.wiredNodeCache.RemoveAt(count-1);
+                    }
 
                     Packet pkg1 = new Packet(this, global.readers[r.Id], PacketType.RSU_NEW_BACKBONE_REQUEST);
-                    pkg1.Next = pkg.Prev;
                     pkg1.VANETNewBbReq = new VANETNewBackboneRequestField(this.IssuedCertificate);
-                    SendPacketDirectly(Scheduler.getInstance().currentTime, pkg1);
+                    if (pkg1.TTL < this.RSUCache[r.Id].hops)
+                        pkg1.TTL = this.RSUCache[r.Id].hops+1;
+                    RoutePacket(pkg1);
                     this.lastSentRSUNewBackboneRequest = scheduler.currentTime;
+                    this.RSUCache.Remove(r.Id);
                 }
             }
             else
@@ -240,6 +234,7 @@ namespace VANETs
             if (pkg.Prev == Id && pkg.PrevType == type)
                 return;
 
+            //添加该邻居
             Neighbor nb = null;
             if (Neighbors.ContainsKey(node.Id))
             {
@@ -254,19 +249,31 @@ namespace VANETs
                 //Add as a neighbor
                 AddNeighbor(node);
             }
+
+            if (!this.routeTable.ContainsKey(node.Id))
+                this.routeTable.Add(node.Id, new RouteEntity(pkg.Prev, pkg.Prev, 1, scheduler.currentTime, scheduler.currentTime));
+            else
+            {
+                this.routeTable[node.Id].hops = 1;
+                this.routeTable[node.Id].next = pkg.Prev;
+                this.routeTable[node.Id].remoteLastUpdatedTime = scheduler.currentTime;
+                this.routeTable[node.Id].localLastUpdatedTime = scheduler.currentTime;
+            }
+
             if (pkg.VANETBeacon.backboneEntity != null)
                 NeighborBackbones[node.Id] = pkg.VANETBeacon.backboneEntity.gateway;
 
             int tempbackbone = -1;
-            if(gatewayEntities.Count>0)
+            if (gatewayEntities.Count > 0)
                 tempbackbone = this.gatewayEntities[-1].gateway;
             if (pkg.VANETBeacon != null && pkg.VANETBeacon.backboneEntity != null)
             {
                 GatewayEntity entity = pkg.VANETBeacon.backboneEntity;
-                if (this.gatewayEntities.Count==0)
+                if (this.gatewayEntities.Count == 0)
                 {
                     this.gatewayEntities[-1] = new GatewayEntity(entity.gateway, entity.next, entity.hops + 1);
-                    Console.WriteLine("{0:F4} [{1}] {2}{3} add a gateway of {4} hops {5}.", scheduler.currentTime, pkg.Type, this.type, this.Id, entity.gateway, entity.hops);
+                    Console.WriteLine("{0:F4} [{1}] {2}{3} add a gateway of {4} hops {5}.", scheduler.currentTime, pkg.Type, this.type, this.Id, entity.gateway, entity.hops);                   
+
                 }
                 else if (entity.gateway != this.gatewayEntities[-1].gateway && this.gatewayEntities[-1].hops > entity.hops + 1)
                 {
@@ -275,12 +282,23 @@ namespace VANETs
                     this.gatewayEntities[-1].next = entity.next;
                     Console.WriteLine("{0:F4} [{1}] {2}{3} update a gateway of {4} hops {5}.", scheduler.currentTime, pkg.Type, this.type, this.Id, entity.gateway, entity.hops);
                 }
+
+                if (!this.routeTable.ContainsKey(entity.gateway))
+                    this.routeTable.Add(entity.gateway, new RouteEntity(entity.gateway, entity.next, entity.hops + 1, scheduler.currentTime, scheduler.currentTime));
+                else if (this.routeTable[entity.gateway].hops > entity.hops + 1)
+                {
+                    this.routeTable[entity.gateway].hops = entity.hops + 1;
+                    this.routeTable[entity.gateway].next = entity.next;
+                }
+
                 //Send a confirm to the gateway
-                if (this.lastSentRSUJoinRequest > 0 && tempbackbone==this.gatewayEntities[-1].gateway)
+                if (this.lastSentRSUJoinRequest > 0 && tempbackbone == this.gatewayEntities[-1].gateway)
                     return;
+                if (tempbackbone != -1 && tempbackbone != this.gatewayEntities[-1].gateway)
+                    Console.WriteLine("{0:F4} [{1}] {2}{3} changed gateway", scheduler.currentTime, "CHANGE_NETWORK", this.type, this.Id);
                 Packet pkg1 = new Packet(this, global.readers[this.gatewayEntities[-1].gateway], PacketType.RSU_JOIN);
                 pkg1.Next = pkg.Prev;
-                pkg1.VANETRSUJoin = new VANETRSUJoinField(Id, this.gatewayEntities[-1].hops, IssuedCertificate, this.IsWired);
+                pkg1.VANETRSUJoin = new VANETRSUJoinField(Id, this.gatewayEntities[-1].hops, this.Neighbors.Count, IssuedCertificate, this.IsWired);
                 SendPacketDirectly(scheduler.currentTime, pkg1);
                 this.lastSentRSUJoinRequest = scheduler.currentTime;
             }
@@ -304,10 +322,14 @@ namespace VANETs
                         continue;
                     this.NearbyObjectCache[obj.Id].time = scheduler.currentTime;
                 }
-                Packet pkg = new Packet(this, obj, PacketType.CERTIFICATE);
+                //认证过程还在进行中
+                if (this.pendingCerterficatingObjects.ContainsKey(obj.Id))
+                    continue;
+                Packet pkg = new Packet(this, obj, PacketType.CERTIFICATE_REQ);
                 pkg.VANETCertificate = new Certificate(obj.Id);
+                pkg.Data = scheduler.currentTime;
                 SendPacketDirectly(scheduler.currentTime, pkg);
-                    
+                this.pendingCerterficatingObjects.Add(obj.Id, scheduler.currentTime);
             }
         }
 
@@ -315,6 +337,11 @@ namespace VANETs
 
         public void RecvCertificate(Packet pkg)
         {
+
+            if (pkg.Next != this.Id)
+                return;
+
+            //rsu收到obu的证书，进行验证
             if (pkg.SrcType != NodeType.OBJECT)
             {
                 Console.WriteLine("Wrong prev type!");
@@ -322,63 +349,141 @@ namespace VANETs
             }
 
             string key = pkg.VANETCertificate.getStrPubKey();
+
             Certificate c = new Certificate(pkg.VANETCertificate.Id, pkg.VANETCertificate.PubKey, pkg.VANETCertificate.CAId, pkg.VANETCertificate.CAPubKey);
             float delay = GetCheckCertificateDelay(c);
-            if (global.vanetCaForward == "none" || !this.CertificateCache.ContainsKey(key))
+
+            //如果本地缓存中没有证书，则向ca请求；不是由本节点认证的话，直接验证（delay=0）
+            if (delay > 0.0001f)
             {
-                Event.AddEvent(new Event(scheduler.currentTime + delay, EventType.CHK_CERT, this, c));
+                CertificateArg arg = new CertificateArg(c, CertificateMethod.REMOTE_AUTH);
+                Console.WriteLine("---------------------------------");
+                Event.AddEvent(new Event(scheduler.currentTime + delay, EventType.CHK_CERT, this, arg));
+                return;
             }
-            else
+
+            if(this.CertificateCache[key].authenticatedRSUId != this.Id)
             {
+                CertificateArg arg = new CertificateArg(c, CertificateMethod.LOCAL);
+                Console.WriteLine("---------------------------------");
+                Event.AddEvent(new Event(scheduler.currentTime + delay, EventType.CHK_CERT, this, arg));
+            }
+            else//否则直接通过
+            {
+                //认证完毕之后删除
+                float starttime = this.pendingCerterficatingObjects[c.Id];
+                this.pendingCerterficatingObjects.Remove(c.Id);
 
                 Packet pkg1 = new Packet(this, global.objects[c.Id], PacketType.DATA_AVAIL);
+                pkg1.Data = starttime;
                 SendPacketDirectly(scheduler.currentTime, pkg1);
-                return;
+            }
+            if (IsPreFetchCertificate(c))
+            {
+                CertificateArg arg = new CertificateArg(c, CertificateMethod.REMOTE_RETR);
+                Console.WriteLine("prefetch---------------------------------");
+                Event.AddEvent(new Event(scheduler.currentTime + global.checkCertDelay, EventType.CHK_CERT, this, arg));
+                this.prefetchingCertIds.Add(c.Id);
             }
         }
 
-        public void CheckCertificate(Certificate c)
+
+        public void CheckCertificate(CertificateArg arg)
         {
+            Certificate c = arg.cert;
+            CertificateMethod method = arg.method;
+            //从CA中获得验证证书的结果
             string key = c.getStrPubKey();
-            if (this.CertificateCache.ContainsKey(key))
+            c.authedRSUId = this.Id;
+
+
+            Console.WriteLine("fetched cert READER{0}---------------------------------{1}", this.Id ,method);
+            if (this.prefetchingCertIds.Contains(c.Id))
+                this.prefetchingCertIds.Remove(c.Id);
+
+            //认证
+            if (method != CertificateMethod.REMOTE_RETR)
             {
-                Packet pkg1 = new Packet(this, global.objects[c.Id], PacketType.DATA_AVAIL);
-                SendPacketDirectly(scheduler.currentTime, pkg1);
-                return;
-            }
-            else if (c.IsValid())
-            {
-                this.CertificateCache.Add(key, new CertificateCache(c, scheduler.currentTime));
+                //如果缓存本来就有证书，成功
+                if (this.CertificateCache.ContainsKey(key))
+                {
+                    //认证完毕之后删除
+                    float starttime = this.pendingCerterficatingObjects[c.Id];
+                    this.pendingCerterficatingObjects.Remove(c.Id);
 
-                Packet pkg1 = new Packet(this, global.objects[c.Id], PacketType.DATA_AVAIL);
-                SendPacketDirectly(scheduler.currentTime, pkg1);
+                    Packet pkg1 = new Packet(this, global.objects[c.Id], PacketType.CERTIFICATE_OK);
+                    pkg1.Data = starttime;
+                    SendPacketDirectly(scheduler.currentTime, pkg1);
 
+                    if (method != CertificateMethod.LOCAL)
+                        this.CertificateCache[key].time = (int)scheduler.currentTime;
+                    //将该节点标记为已由自己认证
+                    this.CertificateCache[key].authenticatedRSUId = this.Id;
+                }
+                //从ca取回的证书是正确的
+                else if (c.IsValid())
+                {
+                    this.CertificateCache.Add(key, new CertificateCache(c, (int)scheduler.currentTime, this.Id));
+                    //将该节点标记为已由自己认证
+                    this.CertificateCache[key].authenticatedRSUId = this.Id;
 
-                //forward certificate cache
-                if (global.vanetCaForward == "none")
-                    return;
+                    //认证完毕之后删除
+                    float starttime = this.pendingCerterficatingObjects[c.Id];
+                    this.pendingCerterficatingObjects.Remove(c.Id);
+
+                    Packet pkg1 = new Packet(this, global.objects[c.Id], PacketType.CERTIFICATE_OK);
+                    pkg1.Data = starttime;
+                    SendPacketDirectly(scheduler.currentTime, pkg1);
+                }
+                //证书不正确
                 else
                 {
-                    Packet pkg2 = new Packet(this, BroadcastNode.Node, PacketType.RSU_CA_FORWARD);
-                    pkg2.TTL = 1;
-                    int hops = 10;//TODO
-                    pkg2.VANETCaForward = new VANETCAForwardField(this.IssuedCertificate, this.CertificateCache[key].cert, hops);
-                    SendPacketDirectly(scheduler.currentTime, pkg2);
+                    Packet pkg1 = new Packet(this, global.objects[c.Id], PacketType.CERTIFICATE_FAIL);
+                    SendPacketDirectly(scheduler.currentTime, pkg1);
+                    return;
                 }
             }
             else
             {
-                Packet pkg1 = new Packet(this, global.objects[c.Id], PacketType.CERTIFICATE_FAIL);
-                SendPacketDirectly(scheduler.currentTime, pkg1);
+                this.CertificateCache[key].time = (int)scheduler.currentTime;
+                //将该节点标记为已由自己认证
+                this.CertificateCache[key].authenticatedRSUId = this.Id;
+            }
+
+
+            //forward certificate cache
+            if (global.vanetCaForward == true)
+            {
+                Packet pkg2 = new Packet(this, BroadcastNode.Node, PacketType.RSU_CA_FORWARD);
+                pkg2.TTL = 5;
+                pkg2.VANETCaForward = new VANETCAForwardField(this.IssuedCertificate, this.CertificateCache[key].cert, this.CertificateCache[key].time, pkg2.TTL, this.Id);
+                SendPacketDirectly(scheduler.currentTime, pkg2);
             }
         }
 
 
         public float GetCheckCertificateDelay(Certificate cert)
         {
-            if (this.CertificateCache.ContainsKey(cert.getStrPubKey()))
+            string key = cert.getStrPubKey();
+            //证书缓存中有该项
+            if (this.CertificateCache.ContainsKey(key) && scheduler.currentTime - this.CertificateCache[key].time < 10)
                 return 0;
             return global.checkCertDelay;
+        }
+
+
+        public bool IsPreFetchCertificate(Certificate cert)
+        {
+            //已经在取了，取消
+            if (this.prefetchingCertIds.Contains(cert.Id))
+                return false;
+            string key = cert.getStrPubKey();
+            //证书缓存中有该项
+            //0.3f是一个较小的值
+            if (this.CertificateCache.ContainsKey(key) && scheduler.currentTime - this.CertificateCache[key].time > 10-global.checkCertDelay-0.3f)
+                return true;
+            else
+                return false;
         }
 
         public void RecvCertificateForward(Packet pkg)
@@ -399,18 +504,91 @@ namespace VANETs
                 return;
             Certificate rsuCert = pkg.VANETCaForward.rsuCA;
             Certificate objCert = pkg.VANETCaForward.objCA;
+            int time = pkg.VANETCaForward.time;
+            int src = pkg.VANETCaForward.src;
+            int hops = pkg.VANETCaForward.hops;
 
             string key = objCert.getStrPubKey();
-            if(this.CertificateCache.ContainsKey(key))
-                return;
-            this.CertificateCache.Add(key, new CertificateCache(objCert, scheduler.currentTime));
+            if (this.CertificateCache.ContainsKey(key))
+            {
+                if (this.CertificateCache[key].time < time)
+                {
+                    this.CertificateCache[key].time = time;
+                    this.CertificateCache[key].cert = objCert;
+                    this.CertificateCache[key].authenticatedRSUId = src;
+                }
+                else
+                    return;
+            }
+            else
+                this.CertificateCache.Add(key, new CertificateCache(objCert, (int)scheduler.currentTime, src));
 
-            if (pkg.VANETCaForward.hops-1 == 0)
+            if (hops - 1 < 0)
                 return;
             Packet pkg1 = new Packet(this, BroadcastNode.Node, PacketType.RSU_CA_FORWARD);
-            pkg1.TTL = 1;
-            pkg1.VANETCaForward = new VANETCAForwardField(pkg.VANETCaForward.rsuCA, pkg.VANETCaForward.objCA, pkg.VANETCaForward.hops - 1);
+            pkg1.TTL = hops - 1;
+            pkg1.VANETCaForward = new VANETCAForwardField(pkg.VANETCaForward.rsuCA, pkg.VANETCaForward.objCA, time, pkg.VANETCaForward.hops - 1, src);
             SendPacketDirectly(scheduler.currentTime, pkg1);
+        }
+
+        public static void ComputeNetworkDetail()
+        {
+            Dictionary<int, int> networkCount = new Dictionary<int, int>();
+            Scheduler scheduler = Scheduler.getInstance();
+            Global global = Global.getInstance();
+            foreach(VANETReader r in global.readers)
+            {
+                //孤立节点
+                if (r.gatewayEntities.Count == 0)
+                    continue;
+                int gw = r.gatewayEntities[-1].gateway;
+                if (networkCount.ContainsKey(gw))
+                    networkCount[gw]++;
+                else
+                    networkCount.Add(gw, 1);
+            }
+            foreach (KeyValuePair<int, int> pair in networkCount)
+            {
+                Console.WriteLine("{0:F4} [{1}] READER{2}:{3}", scheduler.currentTime, "NETWORK_SIZE", pair.Key, pair.Value);
+            }
+        }
+
+        public override void ProcessPacket(Packet pkg)
+        {
+            //I send the packet myself, ignore
+            if (pkg.Prev == Id && pkg.PrevType == type)
+            {
+                return;
+            }
+            
+            switch (pkg.Type)
+            {
+                case PacketType.BEACON:
+                    RecvBeacon(pkg);
+                    break;
+                case PacketType.CERTIFICATE_REP:
+                    RecvCertificate(pkg);
+                    break;
+                case PacketType.RSU_JOIN:
+                    RecvRSUJoin(pkg);
+                    break;
+                case PacketType.RSU_NEW_BACKBONE_REQUEST:
+                    RecvNewBackboneRequest(pkg);
+                    break;
+                case PacketType.RSU_NEW_BACKBONE_RESPONSE:
+                    RecvNewBackboneResponse(pkg);
+                    break;
+                case PacketType.RSU_CA_FORWARD:
+                    RecvCertificateForward(pkg);
+                    break;
+                //Some codes are hided in the base class.
+                default:
+                    base.ProcessPacket(pkg);
+                    return;
+            }
+            pkg.TTL -= 1;
+            if (pkg.TTL < 0)
+                Drop(pkg);
         }
     }
 }

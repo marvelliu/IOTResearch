@@ -17,7 +17,7 @@ namespace MaliciousOrganizationDetection
         {
             GlobalProducer.globalConstructor = MODGlobal.ProduceGlobal;
             SchedulerProducer.schedulerlConstructor = MODScheduler.ProduceScheduler;
-            Global global = Global.getInstance();
+            MODGlobal global = (MODGlobal)Global.getInstance();
 
             global.readerConstructor = MODReader.ProduceReader;
             global.organizationConstructor = MODOrganization.ProduceOrganization;

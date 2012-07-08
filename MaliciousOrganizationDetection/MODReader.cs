@@ -9,6 +9,12 @@ using AdHocBaseApp;
 
 namespace MaliciousOrganizationDetection
 {
+    public class DirectTrustEntity
+    {
+        public double value;
+        public double time;
+    }
+
     public class Deduce2Result
     {
         public bool IsTotalReportSupport;
@@ -22,15 +28,15 @@ namespace MaliciousOrganizationDetection
     }
     public class IteratorType //每次博弈的计数
     {
-        public bool Drop;
-        public bool Normal;
-        public bool SupportM;
+        public bool DropEvent;
+        public bool NormalNode;
+        public bool ReportSupportM;
 
-        public IteratorType(bool Drop, bool Normal, bool SupportM)
+        public IteratorType(bool DropEvent, bool NormalNode, bool ReportSupportM)
         {
-            this.Drop = Drop;
-            this.Normal = Normal;
-            this.SupportM = SupportM;
+            this.DropEvent = DropEvent;
+            this.NormalNode = NormalNode;
+            this.ReportSupportM = ReportSupportM;
         }
         private IteratorType()
         { }
@@ -64,13 +70,18 @@ namespace MaliciousOrganizationDetection
         //包括了节点和机构的可疑属性
         private Dictionary<Node, List<double>> nodeSuspectCount;
         private Dictionary<Node, double> nodeTrustWeights;
+        private Dictionary<Node, double> nodeTrustWeightsLastUpdate;
+        private List<DirectTrustEntity>[] orgDirectTrustWeights;
         private List<IteratorType> nodeIteractions;//博弈次数，越多则经验越多
-        private Dictionary<Node, List<double>> nodeHistoryVariance;
+        private Dictionary<Node, List<double>> nodeHistoryMyVariance;
+        private Dictionary<Node, List<double>> nodeHistoryTotalVariance;
 
         private Dictionary<Node, Dictionary<Node, List<double>>> NBNodeSuspectCount;
-        private Dictionary<Node, Dictionary<Node, double>> NBNodeTrustWeight;
+        private Dictionary<Node, Dictionary<Node, double>> NBNodeTrustWeights;
+        private Dictionary<Node, Dictionary<Node, double>> NBNodeTrustWeightsLastUpdate;
         private Dictionary<Node, List<IteratorType>> NBNodeIteractions;//博弈次数，越多则经验越多
-        private Dictionary<Node, Dictionary<Node, List<double>>> NBNodeHistoryVariance;
+        private Dictionary<Node, Dictionary<Node, List<double>>> NBNodeHistoryMyVariance;
+        private Dictionary<Node, Dictionary<Node, List<double>>> NBNodeHistoryTotalVariance;
 
         new public static MODReader ProduceReader(int id, int org)
         {
@@ -98,13 +109,20 @@ namespace MaliciousOrganizationDetection
 
             this.nodeSuspectCount = new Dictionary<Node, List<double>>() ;
             this.nodeTrustWeights = new Dictionary<Node, double>();
+            this.nodeTrustWeightsLastUpdate = new Dictionary<Node, double>();
+            this.orgDirectTrustWeights = new List<DirectTrustEntity>[global.orgNum];
+            for (int i = 0; i < this.orgDirectTrustWeights.Length;i++ )
+                this.orgDirectTrustWeights[i] = new List<DirectTrustEntity>();
             this.NBNodeIteractions = new Dictionary<Node,List<IteratorType>>();
             this.nodeIteractions = new List<IteratorType>();
-            this.nodeHistoryVariance = new Dictionary<Node, List<double>>();
+            this.nodeHistoryMyVariance = new Dictionary<Node, List<double>>();
+            this.nodeHistoryTotalVariance = new Dictionary<Node, List<double>>();
 
             this.NBNodeSuspectCount = new Dictionary<Node, Dictionary<Node, List<double>>>();
-            this.NBNodeTrustWeight = new Dictionary<Node, Dictionary<Node, double>>();
-            this.NBNodeHistoryVariance = new Dictionary<Node, Dictionary<Node, List<double>>>();
+            this.NBNodeTrustWeights = new Dictionary<Node, Dictionary<Node, double>>();
+            this.NBNodeTrustWeightsLastUpdate = new Dictionary<Node, Dictionary<Node, double>>();
+            this.NBNodeHistoryMyVariance = new Dictionary<Node, Dictionary<Node, List<double>>>();
+            this.NBNodeHistoryTotalVariance = new Dictionary<Node, Dictionary<Node, List<double>>>();
 
 
 
@@ -262,45 +280,157 @@ namespace MaliciousOrganizationDetection
             //Console.WriteLine("Reader{0} check routing done.", id);
         }
 
-
-        private MODEventTrustResult GetEventTrustResult(MODPhenomemon p, List<MODEventTrustResult> results, int suspectedNodeId, int reportNodeId)
+        private MODEventTrustResult GetEventTrustResult(string pkgIdent, MODPhenomemon p, List<MODEventTrustResult> results,
+            int suspectedNodeId, int reportNodeId)
         {
-            bool forge = false;
-            MODEventTrustResult result = null;
-            string pkgIdent = "";
-
             MODEventTrustResult realr = null;
-
-            if (global.debug)
-                Console.WriteLine("Reader{0} GetEventTrustResult", this.Id);
-
             if (p == null)//没观察到接收数据包，则不确定
             {
+                string[] x = pkgIdent.Split(new char[]{'-','>'});
+                int prevId = int.Parse(x[0]);
                 Reader suspectedNode = global.readers[suspectedNodeId];
-                double speed = 0;
+                Reader prevNode = global.readers[prevId];
+                double[] speeds = new double[3];
                 if (this.Speed != null)
-                    speed = this.Speed[0];
+                    speeds[0] = this.Speed[0];
                 if (suspectedNode.Speed != null)
-                    speed += suspectedNode.Speed[0];
-                pkgIdent = "";
+                    speeds[1] = suspectedNode.Speed[0];
+                if (prevNode.Speed != null)
+                    speeds[2] = prevNode.Speed[0];
+
+                bool[] isNeighbors = new bool[2]{this.Neighbors.ContainsKey(prevId), this.Neighbors.ContainsKey(suspectedNodeId)};
+
                 realr = MODEventTrust.NotObservedEventTrustResult(suspectedNodeId, this.Id,
-                            pkgIdent, MODEventCategoryType.DropPacket, speed);
+                            pkgIdent, MODEventCategoryType.DropPacket, speeds, isNeighbors);
             }
             else
             {
-                pkgIdent = MODEventTrust.GetPacketIdent(p.pkg);
                 realr = MODEventTrust.DeduceDropPacketMaliciouslyByPacket(this.Id, this.observedPhenomemons, scheduler.currentTime, p);
             }
+            return GetEventTrustResult(pkgIdent, p, results, suspectedNodeId, reportNodeId, realr);
+        }
+
+        public int GetOneNormalNodeFromReports(Dictionary<Node, MODEventTrustResult> localcachedresults)
+        {
+            foreach (KeyValuePair<Node, MODEventTrustResult> k in localcachedresults)
+            {
+                if (!((MODReader)k.Key).IsMalicious())
+                    return k.Key.Id;
+            }
+            return -1;
+        }
+
+
+        private void AddNeighborReports(Node minNode, MODEventTrustResult realr, int suspectedNodeId, string pkgIdent, Dictionary<Node, MODEventTrustResult> reports)
+        {
+            {
+                MODReader nbNode = (MODReader)minNode;
+                //如果已经保存，则继续
+                if (!reports.ContainsKey(nbNode))
+                {
+                    MODEventTrustResult r = null;
+                    //恶意节点
+                    if (nbNode.IsMalicious() && realr.supportDroppingMalicious <= 0)
+                    {
+                        //如果事件是正常的，那么伪造恶意事件
+                        r = MODEventTrust.ForgeMaliciousEventTrustResult(suspectedNodeId, nbNode.Id, pkgIdent, MODEventCategoryType.DropPacket);
+                        r.supportDroppingMalicious = 1;
+                    }
+                    else if (nbNode.IsMalicious() && realr.supportDroppingMalicious > 0)
+                    {
+                        //如果事件是恶意的，那么伪造正常事件
+                        r = MODEventTrust.ForgeNormalEventTrustResult(suspectedNodeId, nbNode.Id, pkgIdent, MODEventCategoryType.DropPacket);
+                        r.supportDroppingMalicious = -1;
+                    }
+                    else
+                    {
+                        r = new MODEventTrustResult(suspectedNodeId, nbNode.Id, pkgIdent, MODEventCategoryType.DropPacket, realr.ds);
+                        r.supportDroppingMalicious = realr.supportDroppingMalicious;
+                    }
+                    reports.Add(nbNode, r);
+                }
+ 
+            }
+            foreach (int nbId in this.Neighbors.Keys)
+            {
+                if (nbId == minNode.Id)
+                    continue;
+                MODReader nbNode = (MODReader)global.readers[nbId];
+                //如果已经保存，则继续
+                if (!reports.ContainsKey(nbNode))
+                {
+                    if (reports.Count >= global.MaxReportCount)
+                        break;
+                    MODEventTrustResult r = null;
+                    //恶意节点
+                    if (nbNode.IsMalicious() && realr.supportDroppingMalicious <= 0)
+                    {
+                        //如果事件是正常的，那么伪造恶意事件
+                        r = MODEventTrust.ForgeMaliciousEventTrustResult(suspectedNodeId, nbNode.Id, pkgIdent, MODEventCategoryType.DropPacket);
+                        r.supportDroppingMalicious = 1;
+                    }
+                    else if (nbNode.IsMalicious() && realr.supportDroppingMalicious > 0)
+                    {
+                        //如果事件是恶意的，那么伪造正常事件
+                        r = MODEventTrust.ForgeNormalEventTrustResult(suspectedNodeId, nbNode.Id, pkgIdent, MODEventCategoryType.DropPacket);
+                        r.supportDroppingMalicious = -1;
+                    }
+                    else
+                    {
+                        r = new MODEventTrustResult(suspectedNodeId, nbId, pkgIdent, MODEventCategoryType.DropPacket, realr.ds);
+                        r.supportDroppingMalicious = realr.supportDroppingMalicious;
+                    }
+                    reports.Add(nbNode, r);
+                }
+            }
+        }
+
+        private MODEventTrustResult GetEventTrustResult(string pkgIdent, MODPhenomemon p, List<MODEventTrustResult> results, 
+            int suspectedNodeId, int reportNodeId, MODEventTrustResult realr)
+        {
+            //0为正常行为，1为伪造异常报告，2为伪造正常报告
+            bool forgeReport = false;
+            
+            MODEventTrustResult result = null;
+
+
+            if (!this.IsMalicious())
+                return realr;
+            if (global.debug)
+                Console.WriteLine("Reader{0} GetEventTrustResult", this.Id);
+                        
 
             bool isAccept = false;
-            bool isSupport = false;
+            bool isSupportM = false;
             bool isCompositeReportSupport = false;
             //如果是恶意节点，则会考察检测节点可能的动作
             if (this.IsMalicious())
             {
-                if (global.Step1DeduceMethod == DeduceMethod.Native)//原始的话，恶意节点无条件伪造报告
-                    forge = true;
-                else if (global.Step1DeduceMethod == DeduceMethod.Game || global.Step1DeduceMethod == DeduceMethod.OrgGame)
+                if (global.Step1DeduceMethod == DeduceMethod.Native)//原始的话，恶意节点与真实情况相反
+                {
+                    forgeReport = true;
+                    string sSupport = "";
+                    if (global.DropData == false)
+                    {
+                        if (realr.supportDroppingMalicious < 0)
+                            sSupport = "supporting";
+                        else
+                            sSupport = "nonsupporting";
+                    }
+                    else// global.DropData == true
+                    {
+                        if (realr.supportDroppingMalicious > 0)
+                            sSupport = "nonsupporting";
+                        else
+                            sSupport = "supporting";
+                    }
+
+                    Console.WriteLine("{0:F4} [{1}] {2}{3} deduces {4} {5}{6} is {7} by {8}. [{9}:{10}]\t[{11}:{12}]\t[{13}:{14}]-${15}$:{16}",
+                        scheduler.currentTime, "DEDUCTION1-1", this.type, this.Id, sSupport, NodeType.READER, this.Id, "accept", this.Id,
+                        0, 0, 1, 1, 1, 1, pkgIdent, "None");
+                }
+                else if (global.Step1DeduceMethod == DeduceMethod.Game || global.Step1DeduceMethod == DeduceMethod.OrgGame
+                    || global.Step1DeduceMethod == DeduceMethod.CoOrgGame)
                 {
                     //如果是博弈论，则判断检测节点的观点
                     //此处仅以其周围邻居为参考，而非报告节点的邻居，这是由于ad-hoc的局限性所致的
@@ -311,132 +441,155 @@ namespace MaliciousOrganizationDetection
                     ReduceReports(localcachedresults);
                     //初始化邻居的结构，且找到最久的邻居
                     int minNbId = GetLongestNormalNeighbor();
-                    Reader minNbNode = global.readers[minNbId];
-
-                    foreach (int nbId in this.Neighbors.Keys)
-                    {
-
-                        MODReader nbNode = (MODReader)global.readers[nbId];
-                        //如果已经保存，则继续
-                        if (!localcachedresults.ContainsKey(nbNode))
-                        {
-                            if (localcachedresults.Count >= global.MaxReportCount)
-                                break;
-                            MODEventTrustResult r = null;
-                            if (nbNode.IsMalicious() && realr.supportDroppingMalicious <= 0)
-                            {
-                                //如果事件是正常的，那么伪造恶意事件
-                                r = MODEventTrust.ForgeMaliciousEventTrustResult(suspectedNodeId, nbNode.Id, pkgIdent, MODEventCategoryType.DropPacket);
-                                r.supportDroppingMalicious = 1;
-                            }
-                            else if (nbNode.IsMalicious() && realr.supportDroppingMalicious > 0)
-                            {
-                                //如果事件是恶意的，那么伪造正常事件
-                                r = MODEventTrust.ForgeNormalEventTrustResult(suspectedNodeId, nbNode.Id, pkgIdent, MODEventCategoryType.DropPacket);
-                                r.supportDroppingMalicious = -1;
-                            }
-                            else
-                            {
-                                r = new MODEventTrustResult(suspectedNodeId, nbId, pkgIdent, MODEventCategoryType.DropPacket, realr.ds);
-                                r.supportDroppingMalicious = realr.supportDroppingMalicious;
-                            }
-                            localcachedresults.Add(nbNode, r);
-                        }
-                    }
-
-                    Node[] reportNodes = localcachedresults.Keys.ToArray();
-
-                    if (!this.pNBNormal.ContainsKey(minNbNode))
-                        this.pNBNormal.Add(minNbNode, new Dictionary<Node, double>());
-                    if (!this.NBNodeIteractions.ContainsKey(minNbNode))
-                        this.NBNodeIteractions.Add(minNbNode, new List<IteratorType>());
-
-                    if (!this.pNBNormal[minNbNode].ContainsKey(this))
-                        this.pNBNormal[minNbNode].Add(this, global.pInitNormal);
-
-                    foreach (int nbId in this.Neighbors.Keys)
-                    {
-                        MODReader nbNode = (MODReader)global.readers[nbId];
-                        if (!this.pNBNormal[minNbNode].ContainsKey(nbNode))
-                            this.pNBNormal[minNbNode].Add(nbNode, global.pInitNormal);
-                    }
-                    //有一些节点不是我的邻居，暂且也用nbNode表示吧
-                    foreach (Node nbNode in reportNodes)
-                    {
-                        if (!this.pNBNormal[minNbNode].ContainsKey(nbNode))
-                            this.pNBNormal[minNbNode].Add(nbNode, global.pInitNormal);
-                    }
-
-                    if (!this.NBNodeTrustWeight.ContainsKey(minNbNode))
-                    {
-                        this.NBNodeTrustWeight.Add(minNbNode, new Dictionary<Node, double>());
-                        this.NBNodeSuspectCount.Add(minNbNode, new Dictionary<Node, List<double>>());
-                    }
-
-                    Dictionary<Node, double> pNormal = new Dictionary<Node, double>();
-
-                    //这个邻居节点对该节点邻居的印象
-                    foreach (Node reportNode in reportNodes)
-                    {
-                        Organization org = global.orgs[((Reader)reportNode).OrgId];
-                        if (this.NBNodeTrustWeight[minNbNode].ContainsKey(org))
-                            pNormal.Add(reportNode, this.pNBNormal[minNbNode][reportNode] * this.NBNodeTrustWeight[minNbNode][org]);
-                        else
-                            pNormal.Add(reportNode, this.pNBNormal[minNbNode][reportNode]);
-                    }
-
-                    //计算报告节点的live时间，可估算在supportM的条件下，normal的概率
-                    if (!this.NBNodeIteractions.ContainsKey(minNbNode))
-                        this.NBNodeIteractions.Add(minNbNode, new List<IteratorType>());
-                    double pDrop = global.pInitDrop;
-                    //SetDropBySupport(ref pDropBySupportM, ref pDropByNonsupportM, this.NBNodeIteractions[minNbNode]);
-
-
-                    if (global.debug)
-                        Console.WriteLine("deducing reports:{0}", reportNodes.Length);
-                    //然后模拟计算
-                    //if (global.deduceMethod == DeduceMethod.Game )
-                    //{
-                    Deduce2Result d2r = DeduceA2(reportNodes, false, suspectedNodeId, localcachedresults, minNbNode.Id,
-                        pDrop, pNormal, this.NBNodeTrustWeight[minNbNode],
-                        this.NBNodeIteractions[minNbNode]);
-                    isAccept = d2r.IsAccept;
-                    isCompositeReportSupport = d2r.IsTotalReportSupport;
-                    //此时，真实事件是否正常已知，自己的性质，检测节点的最佳行为已知，但是由于整体报告的性质可能出现变化，
-                    //设有共有n个节点，m个正常节点，那么如果少于p-m/2个恶意节点改变自己的报告，则整体报告维持不变，否则整体报告改变。
-                    isSupport = DeduceA1(realr.supportDroppingMalicious <= 0, isCompositeReportSupport, isAccept);
-                    if (isSupport == false)//如果检测节点不同意，则返回
-                        forge = true;
+                    if (minNbId < 0)//没有正常节点
+                        minNbId = GetOneNormalNodeFromReports(localcachedresults);
+                    
+                    if (minNbId < 0)//还是没有正常节点
+                        forgeReport = true;
                     else
-                        forge = false;
-                    //}
+                    {
+                        Reader minNbNode = global.readers[minNbId];
+
+
+                        MODEventTrustResult mr = null;
+                        if (this.IsMalicious() && realr.supportDroppingMalicious <= 0)
+                        {
+                            //如果事件是正常的，那么伪造恶意事件
+                            mr = MODEventTrust.ForgeMaliciousEventTrustResult(suspectedNodeId, this.Id, pkgIdent, MODEventCategoryType.DropPacket);
+                            mr.supportDroppingMalicious = 1;
+                        }
+                        else if (this.IsMalicious() && realr.supportDroppingMalicious > 0)
+                        {
+                            //如果事件是恶意的，那么伪造正常事件
+                            mr = MODEventTrust.ForgeNormalEventTrustResult(suspectedNodeId, this.Id, pkgIdent, MODEventCategoryType.DropPacket);
+                            mr.supportDroppingMalicious = -1;
+                        }
+                        else
+                        {
+                            mr = new MODEventTrustResult(suspectedNodeId, this.Id, pkgIdent, MODEventCategoryType.DropPacket, realr.ds);
+                            mr.supportDroppingMalicious = realr.supportDroppingMalicious;
+                        }
+                        localcachedresults.Add(this, mr);
+
+
+                        AddNeighborReports(minNbNode, realr, suspectedNodeId, pkgIdent, localcachedresults);
+
+                        Node[] reportNodes = localcachedresults.Keys.ToArray();
+
+                        if (!this.pNBNormal.ContainsKey(minNbNode))
+                            this.pNBNormal.Add(minNbNode, new Dictionary<Node, double>());
+                        if (!this.NBNodeIteractions.ContainsKey(minNbNode))
+                            this.NBNodeIteractions.Add(minNbNode, new List<IteratorType>());
+
+                        if (!this.pNBNormal[minNbNode].ContainsKey(this))
+                            this.pNBNormal[minNbNode].Add(this, global.pInitNormal);
+
+                        foreach (int nbId in this.Neighbors.Keys)
+                        {
+                            MODReader nbNode = (MODReader)global.readers[nbId];
+                            if (!this.pNBNormal[minNbNode].ContainsKey(nbNode))
+                                this.pNBNormal[minNbNode].Add(nbNode, global.pInitNormal);
+                        }
+                        //有一些节点不是我的邻居，暂且也用nbNode表示吧
+                        foreach (Node nbNode in reportNodes)
+                        {
+                            if (!this.pNBNormal[minNbNode].ContainsKey(nbNode))
+                                this.pNBNormal[minNbNode].Add(nbNode, global.pInitNormal);
+                        }
+
+                        if (!this.NBNodeTrustWeights.ContainsKey(minNbNode))
+                        {
+                            this.NBNodeTrustWeights.Add(minNbNode, new Dictionary<Node, double>());
+                            this.NBNodeTrustWeightsLastUpdate.Add(minNbNode, new Dictionary<Node, double>());
+                            this.NBNodeSuspectCount.Add(minNbNode, new Dictionary<Node, List<double>>());
+                            this.NBNodeHistoryMyVariance.Add(minNbNode, new Dictionary<Node, List<double>>());
+                            this.NBNodeHistoryTotalVariance.Add(minNbNode, new Dictionary<Node, List<double>>());
+                        }
+
+                        Dictionary<Node, double> pNormal = new Dictionary<Node, double>();
+
+                        if (global.Step1DeduceMethod == DeduceMethod.OrgGame || global.Step1DeduceMethod == DeduceMethod.CoOrgGame)
+                        {
+                            List<DirectTrustEntity>[] orgDirectTrustWeight = new List<DirectTrustEntity>[global.orgNum];
+                            for (int i = 0; i < global.orgNum; i++)
+                            {
+                                orgDirectTrustWeight[i] = new List<DirectTrustEntity>();
+                            }
+                            Dictionary<Node, MODEventTrustResult> suspectedReportNodes =
+                            AdjustNodeTrust(this.NBNodeTrustWeights[minNbNode], this.NBNodeTrustWeightsLastUpdate[minNbNode],
+                                this.NBNodeSuspectCount[minNbNode], orgDirectTrustWeight,
+                                this.NBNodeHistoryMyVariance[minNbNode], this.NBNodeHistoryTotalVariance[minNbNode],
+                                localcachedresults, pkgIdent, minNbNode, suspectedNodeId);
+
+                        }
+                        //这个邻居节点对该节点邻居的印象
+                        foreach (Node reportNode in reportNodes)
+                        {
+                            Organization org = global.orgs[((Reader)reportNode).OrgId];
+                            if (this.NBNodeTrustWeights[minNbNode].ContainsKey(org))
+                                pNormal.Add(reportNode, this.pNBNormal[minNbNode][reportNode] * this.NBNodeTrustWeights[minNbNode][org]);
+                            else
+                                pNormal.Add(reportNode, this.pNBNormal[minNbNode][reportNode]);
+                        }
+
+
+                        //计算报告节点的live时间，可估算在supportM的条件下，normal的概率
+                        if (!this.NBNodeIteractions.ContainsKey(minNbNode))
+                            this.NBNodeIteractions.Add(minNbNode, new List<IteratorType>());
+                        double pDrop = global.pInitDrop;
+                        //SetDropBySupport(ref pDropBySupportM, ref pDropByNonsupportM, this.NBNodeIteractions[minNbNode]);
+
+                        if (global.debug)
+                            Console.WriteLine("deducing reports:{0}", reportNodes.Length);
+                        //然后模拟计算
+
+                        Deduce2Result d2r = DeduceA2(reportNodes, false, suspectedNodeId, localcachedresults, minNbNode.Id,
+                            pDrop, pNormal, this.NBNodeTrustWeights[minNbNode], this.NBNodeTrustWeightsLastUpdate[minNbNode],
+                            this.NBNodeIteractions[minNbNode]);
+                        isAccept = d2r.IsAccept;
+                        isCompositeReportSupport = d2r.IsTotalReportSupport;
+                        //此时，真实事件是否正常已知，自己的性质，检测节点的最佳行为已知，但是由于整体报告的性质可能出现变化，
+                        //设有共有n个节点，m个正常节点，那么如果少于p-m/2个恶意节点改变自己的报告，则整体报告维持不变，否则整体报告改变。
+                        isSupportM = DeduceA1(realr.supportDroppingMalicious <= 0, isCompositeReportSupport, isAccept);
+
+                        if (realr.supportDroppingMalicious > 0 && !isSupportM)
+                            forgeReport = true;
+                        else if (realr.supportDroppingMalicious <= 0 && isSupportM)
+                            forgeReport = true;
+                        else
+                            forgeReport = false;
+                    }
                 }
                 else
                 {
-                    forge = true;
+                    forgeReport = true;
                 }
 
             }
 
-
-            if (!this.IsMalicious() || forge == false)
+            //恶意节点
+            if(forgeReport == false)
             {
-                Console.WriteLine("READER{0} not forge a malicious report", this.Id);
+                Console.WriteLine("READER{0} not forge a report", this.Id);
                 return realr;
-
             }
-            else //恶意节点
+            else if(forgeReport == true)
             {
-                Console.WriteLine("READER{0} forge a malicious report", this.Id);
-                //真实事件是恶意的
-                if (realr.supportDroppingMalicious > 0)
-                    result = MODEventTrust.ForgeNormalEventTrustResult(p.nodeId, this.Id,
-                        MODEventTrust.GetPacketIdent(p.pkg), MODEventCategoryType.DropPacket);
-                else
+                if (realr.supportDroppingMalicious > 0)//真实事件是恶意的
+                {
+                    Console.WriteLine("READER{0} forge a normal report", this.Id);
+                    result = MODEventTrust.ForgeNormalEventTrustResult(suspectedNodeId, this.Id,
+                        pkgIdent, MODEventCategoryType.DropPacket);
+                }
+                else//真实事件是正常的
+                {
+                    Console.WriteLine("READER{0} forge a malicious report", this.Id);
                     result = MODEventTrust.ForgeMaliciousEventTrustResult(suspectedNodeId, this.Id,
-                    pkgIdent, MODEventCategoryType.DropPacket);
+                        pkgIdent, MODEventCategoryType.DropPacket);
+                }
                 return result;
             }
+            return null;
         }
 
         /*
@@ -471,36 +624,38 @@ namespace MaliciousOrganizationDetection
                 SupportMAndFwrdAndGroupMalicious = 3, 
                 NonsupportMAndDropAndGroupNormal = 1, 
                 NonsupportMAndFwrdAndGroupNormal = 3, 
-                NonsupportMAndDropAndGroupMalicious = 3, 
+                NonsupportMAndDropAndGroupMalicious = 3,
                 NonsupportMAndFwrdAndGroupMalicious = 1;
-
             int DropAndGroupNormal = 4, FwrdAndGroupNormal = 4, FwrdAndGroupMalicious = 4, DropAndGroupMalicious = 4;
+
+
+
             foreach (IteratorType it in its)
             {
-                if (it.Drop && it.Normal)
+                if (it.DropEvent && it.NormalNode)
                     DropAndGroupNormal++;
-                if (it.Drop && !it.Normal)
+                if (it.DropEvent && !it.NormalNode)
                     DropAndGroupMalicious++;
-                if (!it.Drop && it.Normal)
+                if (!it.DropEvent && it.NormalNode)
                     FwrdAndGroupNormal++;
-                if (it.Drop && it.Normal)
+                if (!it.DropEvent && !it.NormalNode)
                     FwrdAndGroupMalicious++;
 
-                if (it.Drop && it.Normal && it.SupportM)
+                if (it.DropEvent && it.NormalNode && it.ReportSupportM)
                     SupportMAndDropAndGroupNormal++;
-                if (it.Drop && it.Normal && !it.SupportM)
+                if (it.DropEvent && it.NormalNode && !it.ReportSupportM)
                     NonsupportMAndDropAndGroupNormal++;
-                if (it.Drop && !it.Normal && it.SupportM)
+                if (it.DropEvent && !it.NormalNode && it.ReportSupportM)
                     SupportMAndDropAndGroupMalicious++;
-                if (it.Drop && !it.Normal && !it.SupportM)
+                if (it.DropEvent && !it.NormalNode && !it.ReportSupportM)
                     NonsupportMAndDropAndGroupMalicious++;
-                if (!it.Drop && it.Normal && it.SupportM)
+                if (!it.DropEvent && it.NormalNode && it.ReportSupportM)
                     SupportMAndFwrdAndGroupNormal++;
-                if (!it.Drop && it.Normal && !it.SupportM)
+                if (!it.DropEvent && it.NormalNode && !it.ReportSupportM)
                     NonsupportMAndFwrdAndGroupNormal++;
-                if (it.Drop && it.Normal && it.SupportM)
+                if (!it.DropEvent && !it.NormalNode && it.ReportSupportM)
                     SupportMAndFwrdAndGroupMalicious++;
-                if (it.Drop && it.Normal && !it.SupportM)
+                if (!it.DropEvent && !it.NormalNode && !it.ReportSupportM)
                     NonsupportMAndFwrdAndGroupMalicious++;
 
             }
@@ -526,9 +681,13 @@ namespace MaliciousOrganizationDetection
             if (pkg.Next == BroadcastNode.Node.Id)
                 return;
 
-            //如果不是我需要监控的节点，返回
-            if (!global.monitoredNodes.Contains(pkg.Prev))
+
+            //如果不是我需要监控的节点，返回(在真实丢包的场景中，需要监控所有节点，否则只需要监控特定的节点即可)
+            if (!global.monitoredNodes.Contains(pkg.Prev) && !global.monitoredNodes.Contains(pkg.Next) && global.DropData == false)
                 return;
+
+            if (!global.monitoredNodes.Contains(pkg.Next))
+                global.monitoredNodes.Add(pkg.Next);
 
 
             //记录发送现象
@@ -540,6 +699,16 @@ namespace MaliciousOrganizationDetection
                 if (global.debug)
                     Console.WriteLine("[Debug] reader{0} add a RECV phenomemon of reader{1}", Id, pkg.Next);
 
+            }
+
+            //记录接收现象
+            if (pkg.Next != pkg.Dst)
+            {
+                p = new MODPhenomemon(MODPhenomemonType.RECV_PACKET, pkg.Next, scheduler.currentTime, pkg);
+                p.likehood = global.recvLikehood;
+                this.observedPhenomemons.Add(p);
+                //Console.WriteLine("[Debug] reader{0} add a SEND phenomemon of reader{1}", id, pkg.Prev);
+
                 //延迟检查事件
                 Event.AddEvent(new Event(Scheduler.getInstance().currentTime + global.checkReceivedPacketTimeout, EventType.CHK_RECV_PKT, this, p));
             }
@@ -550,28 +719,31 @@ namespace MaliciousOrganizationDetection
 
         //恶意观察节点推断采取的行为
         //isAccept是接受事件是恶意的
-        public bool DeduceA1(bool normalEvent, bool isCompositeReportSupport, bool isAccept)
+        public bool DeduceA1(bool normalEvent, bool isCompositeReportSupportM, bool isAccept)
         {
-            bool isSupport = false;
-            double aSupport = 0, aNonsupport = 0;
+            bool isSupportM = false;
+            double aSupportM = 0, aNonsupportM = 0;
 
-            aSupport = MODEventTrust.A1Fun(normalEvent, true, isCompositeReportSupport, isAccept);
-            aNonsupport = MODEventTrust.A1Fun(normalEvent, false, isCompositeReportSupport, isAccept);
+            aSupportM = MODEventTrust.A1Fun(normalEvent, true, isCompositeReportSupportM, isAccept);
+            aNonsupportM = MODEventTrust.A1Fun(normalEvent, false, isCompositeReportSupportM, isAccept);
 
-            isSupport = (aSupport > aNonsupport);
-            return isSupport;
+            isSupportM = (aSupportM > aNonsupportM);
+            return isSupportM;
         }
 
-        public Dictionary<Node, MODEventTrustResult> AdjustNodeTrust(Dictionary<Node, double> localNodeTrust,
-            Dictionary<Node, List<double>> localNodeSuspectCount, Dictionary<Node, MODEventTrustResult> cachedresults, 
-            string pkgIdent, Node deducingNode, int suspectNodeId)
+        public Dictionary<Node, MODEventTrustResult> AdjustNodeTrust(Dictionary<Node, double> localNodeTrustWeights, 
+            Dictionary<Node, double> localNodeTrustWeightsLastUpdate, Dictionary<Node, List<double>> localNodeSuspectCount,
+            List<DirectTrustEntity>[] localOrgDirectTrustWeights, 
+            Dictionary<Node, List<double>> localNodeHistoryMyVariance, Dictionary<Node, List<double>> localNodeHistoryTotalVariance,
+            Dictionary<Node, MODEventTrustResult> cachedresults, string pkgIdent, Reader deducingNode, int suspectNodeId)
         {
             Node[] reportNodes = cachedresults.Keys.ToArray();
             MODEventTrustResult myReport = cachedresults[deducingNode];
             Dictionary<int, HashSet<int>> orgMapping = new Dictionary<int, HashSet<int>>();
-            Dictionary<Node, MODEventTrustResult> suspectedReportReaders = new Dictionary<Node, MODEventTrustResult>();
             Dictionary<Node, MODEventTrustResult> suspectedReportOrgs = new Dictionary<Node, MODEventTrustResult>();
             Dictionary<Node, MODEventTrustResult> finalSuspectedReportNodes = new Dictionary<Node, MODEventTrustResult>();
+
+            bool isNB = deducingNode.Neighbors.ContainsKey(suspectNodeId);
 
             foreach (Node reportNode in reportNodes)
             {
@@ -608,18 +780,97 @@ namespace MaliciousOrganizationDetection
                 orgReports.Values.ToList(), pkgIdent, MODEventCategoryType.DropPacket);
 
 
-            if (totalOrgReport.variance > global.MaxTotalOrgVariance)
+            //初始化机构信任值
+            for (int i = 0; i < global.orgNum; i++)
             {
-                //找到所有与自己差别较大的机构
+                Organization org = global.orgs[i];
+                List<DirectTrustEntity> temp = new List<DirectTrustEntity>();
+                double total = 0;
+                foreach (DirectTrustEntity e in localOrgDirectTrustWeights[org.Id])
+                {
+                    if (e.time < scheduler.currentTime - 0.1f)
+                    {
+                        temp.Add(e);
+                        total += e.value;
+                    }
+                }
+                if (!localNodeTrustWeights.ContainsKey(org))
+                {
+                    if (localOrgDirectTrustWeights[org.Id].Count>0)
+                        localNodeTrustWeights.Add(org, total / localOrgDirectTrustWeights[org.Id].Count);
+                    else
+                        localNodeTrustWeights.Add(org, 1f);
+                    localNodeTrustWeightsLastUpdate.Add(org, scheduler.currentTime);
+                }
+                else
+                {
+                    //如果是机构的话，则将其信誉提高一些，作为遗忘因子
+                    //7s恢复0.1
+                    localNodeTrustWeights[org] = Math.Min(1.0f,
+                        localNodeTrustWeights[org] + 0.1 * (scheduler.currentTime - localNodeTrustWeightsLastUpdate[org]) / 6);
+                    if (localOrgDirectTrustWeights[org.Id].Count > 0)
+                    {
+                        localNodeTrustWeights[org] = 0.3 * localNodeTrustWeights[org] + 
+                            0.7 * total / localOrgDirectTrustWeights[org.Id].Count;
+                    }
+                    localNodeTrustWeightsLastUpdate[org] = scheduler.currentTime;
+                }
+                foreach (DirectTrustEntity e in temp)
+                {
+                    localOrgDirectTrustWeights[org.Id].Remove(e);
+                }
+            }
+
+            double variance = MODEventTrust.CalculateRelativeMaliciousEventTrustResult(orgReports.Values.ToList());
+            //if (totalOrgReport.variance > global.MaxTotalOrgVariance)
+            if (variance > global.MaxTotalOrgVariance)
+            {
+                    //找到所有与自己差别较大的机构
                 foreach (KeyValuePair<int, HashSet<int>> k in orgMapping)
                 {
                     int orgId = k.Key;
                     Organization org = global.orgs[orgId];
-                    double dist = MODEventTrust.Distance(myReport, orgReports[org]);
-                    if (dist > global.MaxReportDistance)
+
+                    //是否存在同机构的报告节点
+                    bool hasPeer = orgReports.ContainsKey(global.orgs[deducingNode.OrgId]);
+                    MODEventTrustResult refReport = null;
+
+
+                    if (isNB || hasPeer)
                     {
-                        suspectedReportOrgs.Add(org, orgReports[org]);
-                        finalSuspectedReportNodes.Add(org, orgReports[org]);
+                        if (isNB)
+                            refReport = myReport;
+                        else if (hasPeer)
+                            refReport = orgReports[global.orgs[deducingNode.OrgId]];
+
+                        double supportMe = 0, nonsupportMe = 0;
+                        foreach (int nodeId in orgMapping[org.Id])
+                        {
+                            Node node = global.readers[nodeId];
+                            double myVarianceDist = MODEventTrust.CalculateRelativeMaliciousEventTrustResult(cachedresults[node], refReport);
+                            if (myVarianceDist > global.MaxReportDistance)
+                                nonsupportMe++;
+                            else
+                                supportMe++;
+                        }
+
+                        if ((supportMe / (supportMe + nonsupportMe) < 0.5f && nonsupportMe>1) || nonsupportMe > 3)
+                        {
+                            suspectedReportOrgs.Add(org, orgReports[org]);
+                            finalSuspectedReportNodes.Add(org, orgReports[org]);
+                        }
+                        //double dist = MODEventTrust.Distance(myReport, orgReports[org]);
+                    }
+                    //非邻居
+                    else
+                    {
+                        //orgReports[org].myVarianceDist = MODEventTrust.CalculateRelativeMaliciousEventTrustResult(orgReports[org], myReport);                    
+                        orgReports[org].totalVarianceDist = MODEventTrust.CalculateRelativeMaliciousEventTrustResult(orgReports[org], totalOrgReport);
+                        if (orgReports[org].totalVarianceDist > global.MaxReportDistance)
+                        {
+                            suspectedReportOrgs.Add(org, orgReports[org]);
+                            finalSuspectedReportNodes.Add(org, orgReports[org]);
+                        }
                     }
                 }
 
@@ -633,28 +884,68 @@ namespace MaliciousOrganizationDetection
                     foreach (int nodeId in orgMapping[orgId])
                     {
                         Node node = global.readers[nodeId];
-                        if (MODEventTrust.Distance(myReport, cachedresults[node]) > global.MaxReportDistance)
+
+                        cachedresults[node].myVarianceDist = MODEventTrust.CalculateRelativeMaliciousEventTrustResult(cachedresults[node], myReport);
+                        cachedresults[node].totalVarianceDist = MODEventTrust.CalculateRelativeMaliciousEventTrustResult(cachedresults[node], totalOrgReport);
+                        if (isNB && cachedresults[node].myVarianceDist > global.MaxReportDistance)
+                        {
+                            //if (MODEventTrust.Distance(myReport, cachedresults[node]) > global.MaxReportDistance)
+                            finalSuspectedReportNodes.Add(node, cachedresults[node]);
+                            continue;
+                        }
+                        else if (cachedresults[node].totalVarianceDist > global.MaxReportDistance)
                         {
                             finalSuspectedReportNodes.Add(node, cachedresults[node]);
                         }
+                        
                     }
                 }
+                                
+                //所有节点添加历史相关度
+                foreach (KeyValuePair<Node, MODEventTrustResult> k in cachedresults)
+                {
+                    Node node = k.Key;
+                    if (!localNodeHistoryMyVariance.ContainsKey(node))
+                        localNodeHistoryMyVariance.Add(node, new List<double>());
+                    if(isNB)
+                        localNodeHistoryMyVariance[node].Add(k.Value.myVarianceDist);
+                    if (!localNodeHistoryTotalVariance.ContainsKey(node))
+                        localNodeHistoryTotalVariance.Add(node, new List<double>());
+                    localNodeHistoryMyVariance[node].Add(k.Value.totalVarianceDist);
+                }
+                foreach (KeyValuePair<Node, MODEventTrustResult> k in suspectedReportOrgs)
+                {
+                    Node node = k.Key;
+                    if (!localNodeHistoryMyVariance.ContainsKey(node))
+                        localNodeHistoryMyVariance.Add(node, new List<double>());
+                    if (isNB)
+                        localNodeHistoryMyVariance[node].Add(k.Value.myVarianceDist);
+                    if (!localNodeHistoryTotalVariance.ContainsKey(node))
+                        localNodeHistoryTotalVariance.Add(node, new List<double>());
+                    localNodeHistoryMyVariance[node].Add(k.Value.totalVarianceDist);
+                }
 
-                //将可疑机构与自己的结果的比较
+
+                //计算将可疑机构或节点的信任值
                 foreach (KeyValuePair<Node, MODEventTrustResult> k in finalSuspectedReportNodes)
                 {
                     Node node = k.Key;
-                    double variance = k.Value.myvariance;
-                    double freq = 1, historyVarianceStandardDeviation = 1;
+                    double myVarianceDist = k.Value.myVarianceDist;
 
+
+                    double freq = 1;
                     if (!localNodeSuspectCount.ContainsKey(node))
                         localNodeSuspectCount.Add(node, new List<double>());
-
-                    if (!localNodeTrust.ContainsKey(node))
-                        localNodeTrust.Add(node, 1f);
                     
+                    //初始化节点信任值，机构信任值已经初始化完毕
+                    if (!localNodeTrustWeights.ContainsKey(node) && node.type == NodeType.READER)
+                    {
+                        localNodeTrustWeights.Add(node, 1f);
+                        localNodeTrustWeightsLastUpdate.Add(node, scheduler.currentTime);
+                    }
+
                     if (node.type == NodeType.READER)//考察节点短期的行为，则置1
-                        localNodeTrust[node] = 1f;
+                        localNodeTrustWeights[node] = 1f;
 
                     localNodeSuspectCount[node].Add(scheduler.currentTime);
                     while (localNodeSuspectCount[node].Count>0)//删除首部过时的恶意报告
@@ -669,36 +960,60 @@ namespace MaliciousOrganizationDetection
                     //这里惩罚节点有三个条件，一个是与自己的相关度（惩罚小的），另一个是被怀疑的频率（惩罚大的），还有一个是历史的相关度变化（惩罚变化频繁的）
                     
                     //考察历史相关度偏移程度
-                    if (!this.nodeHistoryVariance.ContainsKey(node))
-                        this.nodeHistoryVariance.Add(node, new List<double>());
-                    this.nodeHistoryVariance[node].Add(variance);
-                    if (this.nodeHistoryVariance[node].Count > 2)//曲线至少有三个点
+                    double historyVarianceStandardDeviation = 1;
+                    if (isNB && localNodeHistoryMyVariance[node].Count > 2)//曲线至少有三个点
                     {
                         //使历史记录数量维持在MaxHistoryCount之内
-                        if (nodeHistoryVariance[node].Count > global.MaxHistoryCount)
-                            nodeHistoryVariance[node].RemoveRange(0, nodeHistoryVariance[node].Count - global.MaxHistoryCount);
+                        if (localNodeHistoryMyVariance[node].Count > global.MaxHistoryCount)
+                            localNodeHistoryMyVariance[node].RemoveRange(0, localNodeHistoryMyVariance[node].Count - global.MaxHistoryCount);
 
-                        double[] arcs = new double[this.nodeHistoryVariance[node].Count];
-                        for (int i = 0; i < this.nodeHistoryVariance[node].Count; i++)
+                        double[] arcs = new double[localNodeHistoryMyVariance[node].Count];
+                        for (int i = 0; i < localNodeHistoryMyVariance[node].Count; i++)
                             arcs[i] = 0.1f * i;
 
                         LinearRegression reg = new LinearRegression();
-                        reg.BuildLSMCurve(arcs, this.nodeHistoryVariance[node], 1, false);
+                        reg.BuildLSMCurve(arcs, localNodeHistoryMyVariance[node], 1, false);
                         //考察reg.CoefficientsStandardError
                         historyVarianceStandardDeviation = reg.StandardDeviation;
                     }
+                    else if (localNodeHistoryTotalVariance[node].Count > 2)//曲线至少有三个点
+                    {
+                        //使历史记录数量维持在MaxHistoryCount之内
+                        if (localNodeHistoryTotalVariance[node].Count > global.MaxHistoryCount)
+                            localNodeHistoryTotalVariance[node].RemoveRange(0, localNodeHistoryTotalVariance[node].Count - global.MaxHistoryCount);
 
-                    localNodeTrust[node] *= global.AdjustFactor /
-                        ((Math.Log(freq + 1, global.SuspectedCountBase) + 1) * Math.Pow(global.VarianceBase, variance)
+                        double[] arcs = new double[localNodeHistoryTotalVariance[node].Count];
+                        for (int i = 0; i < localNodeHistoryTotalVariance[node].Count; i++)
+                            arcs[i] = 0.1f * i;
+
+                        LinearRegression reg = new LinearRegression();
+                        reg.BuildLSMCurve(arcs, localNodeHistoryTotalVariance[node], 1, false);
+                        //考察reg.CoefficientsStandardError
+                        historyVarianceStandardDeviation = reg.StandardDeviation; 
+                    }
+                    double vv = isNB? Math.Pow(global.VarianceBase, myVarianceDist):1;
+
+                    localNodeTrustWeights[node] *= global.AdjustFactor /
+                        ((Math.Log(freq + 1, global.SuspectedCountBase) + 1) * vv
                         * (Math.Log(historyVarianceStandardDeviation, global.HistoryVSDBase) + 1));
-                    if (localNodeTrust[node] > 1)
-                        localNodeTrust[node] = 0.99f;
-                    else if(localNodeTrust[node] <=0)
-                        localNodeTrust[node] = 0.1f;
+                    if (localNodeTrustWeights[node] > 1)
+                        localNodeTrustWeights[node] = 0.99f;
+                    else if(localNodeTrustWeights[node] <=0)
+                        localNodeTrustWeights[node] = 0.01f;
 
                 }
             }
             return finalSuspectedReportNodes;
+        }
+
+        void PrintReports(Dictionary<Node, MODEventTrustResult> reports)
+        {
+            Console.Write("{0:F4} [{1}] READER{2}\t", scheduler.currentTime, "REPORTS", this.Id);
+            foreach (KeyValuePair<Node, MODEventTrustResult> k in reports)
+            {
+                Console.Write("{0}:{1}\t", k.Key, k.Value.supportDroppingMalicious);
+            }
+            Console.WriteLine();
         }
 
 
@@ -708,13 +1023,25 @@ namespace MaliciousOrganizationDetection
             while (results.Count > global.MaxReportCount)
             {
                 Node n1 = null, n2 = null;
+                //先找两方都不确定的
+                bool f1 = false, f2 = false;
                 foreach (KeyValuePair<Node, MODEventTrustResult> k in results)
                 {
-                    if (n1 == null && k.Value.supportDroppingMalicious > 0 && k.Key != this)
+                    if(MODEventTrust.getDist(k.Value.ds) > 0.20)
+                        continue;
+                    if (!f1 && n1 == null && k.Value.supportDroppingMalicious > 0 && k.Key != this)
                         n1 = k.Key;
-                    else if (n2 == null && k.Value.supportDroppingMalicious <= 0 && k.Key != this)
+                    else if (!f2 && n2 == null && k.Value.supportDroppingMalicious <= 0 && k.Key != this)
                         n2 = k.Key;
                 }
+                foreach (KeyValuePair<Node, MODEventTrustResult> k in results)
+                {
+                    if (!f1 && n1 == null && k.Value.supportDroppingMalicious > 0 && k.Key != this)
+                        n1 = k.Key;
+                    else if (!f2 && n2 == null && k.Value.supportDroppingMalicious <= 0 && k.Key != this)
+                        n2 = k.Key;
+                }
+
                 if (n1 != null)
                     results.Remove(n1);
                 if (n2 != null)
@@ -725,9 +1052,22 @@ namespace MaliciousOrganizationDetection
         //对最终邻居的结果进行分析
         public void DeduceEventType(string pkgIdent)
         {
+            //清除过期的现象
+            List<string> outdatedReports = new List<string>();
+            foreach (KeyValuePair<string, Dictionary<Node, MODEventTrustResult>> k in this.receivedEventReports)
+            {
+                double timeStamp = k.Value.First().Value.timeStamp;
+                if (scheduler.currentTime - timeStamp > 8)
+                    outdatedReports.Add(k.Key);
+            }
+            foreach (string o in outdatedReports)
+            {
+                this.receivedEventReports.Remove(o);
+            }
+
             if(MODEventTrustResult.DeducedPackets.Contains(pkgIdent))
                 return;
-            Console.WriteLine("Reader{0} Deduces Event Type for {1}", this.Id, pkgIdent);
+            //Console.WriteLine("Reader{0} Deduces Event Type for {1}", this.Id, pkgIdent);
             
             Dictionary<Node, MODEventTrustResult> cachedresults = null;
             if (this.receivedEventReports.ContainsKey(pkgIdent))
@@ -735,43 +1075,64 @@ namespace MaliciousOrganizationDetection
             else
                 throw new Exception("no such an ident in receivedEventReports");
 
+            int suspectedNodeId = cachedresults.First().Value.nodeId;
+            if (!cachedresults.ContainsKey(this))
+            {
+                MODEventTrustResult myresult = GetEventTrustResult(pkgIdent, null, cachedresults.Values.ToList(), suspectedNodeId, this.Id); ;
+                cachedresults.Add(this, myresult);
+            }
+
 
             ReduceReports(cachedresults);
-            foreach(KeyValuePair<Node, MODEventTrustResult> k in cachedresults)
-            {
-                Console.Write("{0}:{1}\t", k.Key, k.Value.supportDroppingMalicious);
-            }
-            Console.WriteLine();
-
-            int suspectNodeId = -1;
-            foreach (KeyValuePair<Node, MODEventTrustResult> r in cachedresults)
-            {
-                suspectNodeId = r.Value.node;
-                break;
-            }
+            PrintReports(cachedresults);
 
 
             if (global.Step2DeduceMethod == DeduceMethod.Native)
             {
-                int normalCount = 0, maliciousCount = 0;
+                int supportMCount = 0, nonsupportMCount = 0;
                 foreach (KeyValuePair<Node, MODEventTrustResult> r in cachedresults)
                 {
+                    //如果该节点对正常还是恶意均不确定，那还是算了
+                    if(MODEventTrust.getDist(r.Value.ds)< global.ReportMinDist)
+                        continue;
                     if (r.Value.supportDroppingMalicious > 0)
-                        normalCount++;
+                        supportMCount++;
                     else
-                        maliciousCount++;
+                        nonsupportMCount++;
 
                     //Console.Write("{0}:{1}\t",r.Key, r.Value.normal);
                 }
-                if (normalCount > maliciousCount)
-                    Console.WriteLine("{0:F4} [{1}] {2}{3} deduces {4}{5} is normal. {6}-{7}", scheduler.currentTime, "DEDUCTION2", this.type, this.Id, NodeType.READER, suspectNodeId, normalCount, maliciousCount);
+
+
+                string sAccept = "", sResult = "", sSupport = "";
+                bool isAccept = false, isReportSupportM = false;
+                if (supportMCount > nonsupportMCount)
+                {
+                    isReportSupportM = true;
+                    sSupport = "supporting";
+                }
                 else
-                    Console.WriteLine("{0:F4} [{1}] {2}{3} deduces {4}{5} is malicious. {6}-{7}", scheduler.currentTime, "DEDUCTION2", this.type, this.Id, NodeType.READER, suspectNodeId, normalCount, maliciousCount);
+                {
+                    isReportSupportM = false;
+                    sSupport = "nonsupporting";
+                }
+                isAccept = true;
+                sAccept = "accept";
+
+                bool duduceIsNormal = (isReportSupportM ^ isAccept);
+
+                //这里由于真实事件都是正常的，所以直接用true代替,ps:DropData代表正常场景下丢包
+                sResult = (duduceIsNormal != global.DropData) ? "Succ" : "Fail";
+
+                Console.WriteLine("{0:F4} [{1}] {2}{3} deduces {4} {5}{6} is {7} by {8}. [{9}:{10}]\t[{11}:{12}]\t[{13}:{14}]-${15}$:{16}",
+                    scheduler.currentTime, "DEDUCTION1-2", this.type, this.Id, sSupport, NodeType.READER, suspectedNodeId, sAccept, this.Id,
+                    0, 0, 1, 1, supportMCount, nonsupportMCount, pkgIdent, sResult);
+
             }
             else //博弈论的方法
             {
                 //自己的记录是否存在
-                if(!cachedresults.ContainsKey(this))
+                if (!cachedresults.ContainsKey(this))
                 {
                     throw new Exception("myresult result is null");
                 }
@@ -785,7 +1146,7 @@ namespace MaliciousOrganizationDetection
                         this.pNormal.Add(k.Key, global.pInitNormal);
                 }
                 Node[] reportNodes = cachedresults.Keys.ToArray();
-                                              
+
                 //朴素博弈论
                 if (global.Step2DeduceMethod == DeduceMethod.Game)
                 {
@@ -794,19 +1155,21 @@ namespace MaliciousOrganizationDetection
                     double pDrop = global.pInitDrop;
                     //SetDropBySupport(ref pDropBySupportM, ref pDropByNonsupportM, this.nodeIteractions);
 
-                    Deduce2Result d2r = DeduceA2(reportNodes, true, suspectNodeId, cachedresults, this.Id,
-                        pDrop, this.pNormal, this.nodeTrustWeights, this.nodeIteractions);
+                    Deduce2Result d2r = DeduceA2(reportNodes, true, suspectedNodeId, cachedresults, this.Id,
+                        pDrop, this.pNormal, this.nodeTrustWeights, this.nodeTrustWeightsLastUpdate, this.nodeIteractions);
                     bool isAccept = d2r.IsAccept;
-                    
+
                 }
-                else if (global.Step2DeduceMethod == DeduceMethod.OrgGame)
+                else if (global.Step2DeduceMethod == DeduceMethod.OrgGame || global.Step2DeduceMethod == DeduceMethod.CoOrgGame)
                 {
                     //这里的pNormal是更新后的了
                     Dictionary<Node, double> pNormal = new Dictionary<Node, double>();
 
-                    Dictionary<Node, MODEventTrustResult> suspectedReportNodes = 
-                        AdjustNodeTrust(this.nodeTrustWeights, this.nodeSuspectCount, cachedresults, pkgIdent, this, suspectNodeId);
-
+                    Dictionary<Node, MODEventTrustResult> suspectedReportNodes =
+                        AdjustNodeTrust(this.nodeTrustWeights, this.nodeTrustWeightsLastUpdate, this.nodeSuspectCount, 
+                        this.orgDirectTrustWeights, this.nodeHistoryMyVariance, this.nodeHistoryTotalVariance,
+                        cachedresults, pkgIdent, this, suspectedNodeId);
+                    
                     foreach (Node reportNode in reportNodes)
                     {
                         Organization org = global.orgs[((Reader)reportNode).OrgId];
@@ -816,21 +1179,37 @@ namespace MaliciousOrganizationDetection
                             pNormal.Add(reportNode, this.pNormal[reportNode] * this.nodeTrustWeights[org]);
                         else
                             pNormal.Add(reportNode, this.pNormal[reportNode]);
-                        if (global.debug)
-                        {
-                            //Console.WriteLine("node:{0}\t,pNormal:{1}", reportNode, pNormal[reportNode]);
-                        }
                     }
 
                     double pDrop = global.pInitDrop;
-                    //double pDropBySupportM = 0, pDropByNonsupportM = 0;
-                    //SetDropBySupport(ref pDropBySupportM, ref pDropByNonsupportM, this.nodeIteractions);
 
-
-                    Deduce2Result d2r = DeduceA2(reportNodes, true, suspectNodeId, cachedresults, this.Id,
-                        pDrop, pNormal, this.nodeTrustWeights, this.nodeIteractions);
+                    Deduce2Result d2r = DeduceA2(reportNodes, true, suspectedNodeId, cachedresults, this.Id,
+                        pDrop, pNormal, this.nodeTrustWeights, this.nodeTrustWeightsLastUpdate, this.nodeIteractions);
 
                     bool isAccept = d2r.IsAccept;
+
+
+                    //如果没有与事件怀疑节点不是邻居，则参考
+                    if (global.Step2DeduceMethod == DeduceMethod.CoOrgGame && this.Neighbors.ContainsKey(suspectedNodeId))
+                    {
+                        foreach (int nbId in this.Neighbors.Keys)
+                        {
+                            MODReader nbReader = (MODReader)global.readers[nbId];
+                            if (nbReader.Neighbors.ContainsKey(suspectedNodeId))
+                                continue;
+
+                            for (int i = 0; i < global.orgNum; i++)
+                            {
+                                Organization org = global.orgs[i];
+                                if (!this.nodeSuspectCount.ContainsKey(org) || this.nodeSuspectCount[org].Count < 1)
+                                    continue;
+                                DirectTrustEntity entity = new DirectTrustEntity();
+                                entity.value = this.nodeTrustWeights[org];
+                                entity.time = scheduler.currentTime;
+                                nbReader.orgDirectTrustWeights[org.Id].Add(entity);
+                            }
+                        }
+                    }
                 }
                 else
                     throw new Exception("Unknown deduce type");
@@ -860,18 +1239,33 @@ namespace MaliciousOrganizationDetection
         }
 
 
-        public Deduce2Result DeduceA2(Node[] reportNodes, bool isDeduceStep2, int nodeId, Dictionary<Node, MODEventTrustResult> cachedresults, 
-            int step1Node, double pDrop, Dictionary<Node, double> pNormal, Dictionary<Node, double> nodeTrustWeight,
-            List<IteratorType> iteractions)
+        public Deduce2Result DeduceA2(Node[] reportNodes, bool isDeduceStep2, int suspectedNodeId, Dictionary<Node, MODEventTrustResult> cachedresults, 
+            int deduceNodeId, double pDrop, Dictionary<Node, double> pNormal, Dictionary<Node, double> localNodeTrustWeights,
+            Dictionary<Node, double> localNodeTrustWeightsLastUpdate, List<IteratorType> iteractions)
         {
-            
+            string pkgIdent = cachedresults.First().Value.eventIdent;
+
             foreach (Node node in reportNodes)
             {
-                if (!nodeTrustWeight.ContainsKey(node))//如果没有记录，则设其初始权重为1
-                    nodeTrustWeight.Add(node, 1f);
+                if (!localNodeTrustWeights.ContainsKey(node))//如果没有记录，则设其初始权重为1
+                {
+                    localNodeTrustWeights.Add(node, 1f);
+                    localNodeTrustWeightsLastUpdate.Add(node, scheduler.currentTime);
+                }
                 Organization org = global.orgs[((Reader)node).OrgId];
-                if (!nodeTrustWeight.ContainsKey(org))
-                    nodeTrustWeight.Add(org, 1f);
+                if (!localNodeTrustWeights.ContainsKey(org))
+                {
+                    localNodeTrustWeights.Add(org, 1f);
+                    localNodeTrustWeightsLastUpdate.Add(org, scheduler.currentTime);
+                }
+            }
+            foreach (Organization org in global.orgs)
+            {
+                if (!localNodeTrustWeights.ContainsKey(org))
+                {
+                    localNodeTrustWeights.Add(org, 1f);
+                    localNodeTrustWeightsLastUpdate.Add(org, scheduler.currentTime);
+                }
             }
 
             double supportMWeight = 0, nonsupportMWeight = 0;
@@ -882,14 +1276,19 @@ namespace MaliciousOrganizationDetection
             {
                 Node node = k.Key;
                 MODEventTrustResult result = k.Value;
+
+                if (MODEventTrust.getDist(result.ds) < global.ReportMinDist)
+                    continue;
+
+                Organization org = global.orgs[((Reader)node).OrgId];
                 if (result.supportDroppingMalicious > 0)
                 {
-                    supportMWeight += nodeTrustWeight[node];
+                    supportMWeight += localNodeTrustWeights[node] * localNodeTrustWeights[org];
                     supportMNodes++;
                 }
                 else
                 {
-                    nonsupportMWeight += nodeTrustWeight[node];
+                    nonsupportMWeight += localNodeTrustWeights[node] * localNodeTrustWeights[org];
                     nonsupportMNodes++;
                 }
             }
@@ -922,7 +1321,7 @@ namespace MaliciousOrganizationDetection
                     {
                         Organization org = global.orgs[((Reader)node).OrgId];
                         set1.Add(node);
-                        w1 += nodeTrustWeight[node]*nodeTrustWeight[org];
+                        w1 += localNodeTrustWeights[node]*localNodeTrustWeights[org];
                     }
 
                     foreach (Node node in reportNodes)//找出相反的节点
@@ -931,7 +1330,7 @@ namespace MaliciousOrganizationDetection
                             continue;
                         Organization org = global.orgs[((Reader)node).OrgId];
                         set2.Add(node);
-                        w2 += nodeTrustWeight[node] * nodeTrustWeight[org];
+                        w2 += localNodeTrustWeights[node] * localNodeTrustWeights[org];
                     }
                     if (w1 < w2)//如果权重和不够，则skip
                         continue;
@@ -969,6 +1368,36 @@ namespace MaliciousOrganizationDetection
                 ref pNonsupportMByDropAndGroupMalicious, ref pNonsupportMByFwrdAndGroupMalicious, iteractions);
 
 
+            double uA2DropAndNormalAndSupportMDAndAccept = global.uA2DropAndNormalAndSupportMDAndAccept;
+            double uA2FwrdAndNormalAndSupportMDAndAccept = global.uA2FwrdAndNormalAndSupportMDAndAccept;
+            double uA2DropAndMaliciousAndSupportMDAndAccept = global.uA2DropAndMaliciousAndSupportMDAndAccept;
+            double uA2FwrdAndMaliciousAndSupportMDAndAccept = global.uA2FwrdAndMaliciousAndSupportMDAndAccept;
+            double uA2DropAndNormalAndSupportMDAndReject = global.uA2DropAndNormalAndSupportMDAndReject;
+            double uA2FwrdAndNormalAndSupportMDAndReject = global.uA2FwrdAndNormalAndSupportMDAndReject;
+            double uA2DropAndMaliciousAndSupportMDAndReject = global.uA2DropAndMaliciousAndSupportMDAndReject;
+            double uA2FwrdAndMaliciousAndSupportMDAndReject = global.uA2FwrdAndMaliciousAndSupportMDAndReject;
+            double uA2DropAndNormalAndNonsupportMDAndAccept = global.uA2DropAndNormalAndNonsupportMDAndAccept;
+            double uA2FwrdAndNormalAndNonsupportMDAndAccept = global.uA2FwrdAndNormalAndNonsupportMDAndAccept;
+            double uA2DropAndMaliciousAndNonsupportMDAndAccept = global.uA2DropAndMaliciousAndNonsupportMDAndAccept;
+            double uA2FwrdAndMaliciousAndNonsupportMDAndAccept = global.uA2FwrdAndMaliciousAndNonsupportMDAndAccept;
+            double uA2DropAndNormalAndNonsupportMDAndReject = global.uA2DropAndNormalAndNonsupportMDAndReject;
+            double uA2FwrdAndNormalAndNonsupportMDAndReject = global.uA2FwrdAndNormalAndNonsupportMDAndReject;
+            double uA2DropAndMaliciousAndNonsupportMDAndReject = global.uA2DropAndMaliciousAndNonsupportMDAndReject;
+            double uA2FwrdAndMaliciousAndNonsupportMDAndReject = global.uA2FwrdAndMaliciousAndNonsupportMDAndReject;
+            
+            Reader deduceNode = global.readers[deduceNodeId];
+            UpdateAwardFunction(cachedresults[deduceNode].supportDroppingMalicious > 0, isReportSupportM,  
+                ref uA2DropAndNormalAndSupportMDAndAccept, ref uA2FwrdAndNormalAndSupportMDAndAccept,
+                ref uA2DropAndMaliciousAndSupportMDAndAccept, ref uA2FwrdAndMaliciousAndSupportMDAndAccept,
+                ref uA2DropAndNormalAndSupportMDAndReject, ref uA2FwrdAndNormalAndSupportMDAndReject,
+                ref uA2DropAndMaliciousAndSupportMDAndReject, ref uA2FwrdAndMaliciousAndSupportMDAndReject,
+                ref uA2DropAndNormalAndNonsupportMDAndAccept, ref uA2FwrdAndNormalAndNonsupportMDAndAccept, 
+                ref uA2DropAndMaliciousAndNonsupportMDAndAccept, ref uA2FwrdAndMaliciousAndNonsupportMDAndAccept,
+                ref uA2DropAndNormalAndNonsupportMDAndReject, ref uA2FwrdAndNormalAndNonsupportMDAndReject,
+                ref uA2DropAndMaliciousAndNonsupportMDAndReject, ref uA2FwrdAndMaliciousAndNonsupportMDAndReject
+                );
+
+
             if (isReportSupportM)
             {
                 double pSupportM = pSupportMByDropAndGroupNormal * pDrop * pGroupNormal
@@ -983,15 +1412,15 @@ namespace MaliciousOrganizationDetection
 
 
                 //计算效用函数与后验概率的乘积
-                double aNormalAndSupportMDAndAccept = pDropAndGroupNormalBySupportM * global.uA2DropAndNormalAndSupportMDAndAccept
-                    + pFwrdAndGroupNormalBySupportM * global.uA2FwrdAndNormalAndSupportMDAndAccept;
-                double aMaliciousAndSupportMDAndAccept = pDropAndGroupMaliciousBySupportM * global.uA2DropAndMaliciousAndSupportMDAndAccept
-                    + pFwrdAndGroupMaliciousBySupportM * global.uA2FwrdAndMaliciousAndSupportMDAndAccept;
+                double aNormalAndSupportMDAndAccept = pDropAndGroupNormalBySupportM * uA2DropAndNormalAndSupportMDAndAccept
+                    + pFwrdAndGroupNormalBySupportM * uA2FwrdAndNormalAndSupportMDAndAccept;
+                double aMaliciousAndSupportMDAndAccept = pDropAndGroupMaliciousBySupportM * uA2DropAndMaliciousAndSupportMDAndAccept
+                    + pFwrdAndGroupMaliciousBySupportM * uA2FwrdAndMaliciousAndSupportMDAndAccept;
 
-                double aNormalAndSupportMDAndReject = pDropAndGroupNormalBySupportM * global.uA2DropAndNormalAndSupportMDAndReject
-                    + pFwrdAndGroupNormalBySupportM * global.uA2FwrdAndNormalAndSupportMDAndReject;
-                double aMaliciousAndSupportMDAndReject = pDropAndGroupMaliciousBySupportM * global.uA2DropAndMaliciousAndSupportMDAndReject
-                    + pFwrdAndGroupMaliciousBySupportM * global.uA2FwrdAndMaliciousAndSupportMDAndReject;
+                double aNormalAndSupportMDAndReject = pDropAndGroupNormalBySupportM * uA2DropAndNormalAndSupportMDAndReject
+                    + pFwrdAndGroupNormalBySupportM * uA2FwrdAndNormalAndSupportMDAndReject;
+                double aMaliciousAndSupportMDAndReject = pDropAndGroupMaliciousBySupportM * uA2DropAndMaliciousAndSupportMDAndReject
+                    + pFwrdAndGroupMaliciousBySupportM * uA2FwrdAndMaliciousAndSupportMDAndReject;
 
                 aAccept = aNormalAndSupportMDAndAccept + aMaliciousAndSupportMDAndAccept;
                 aReject = aNormalAndSupportMDAndReject + aMaliciousAndSupportMDAndReject;
@@ -1009,22 +1438,22 @@ namespace MaliciousOrganizationDetection
                     + pNonsupportMByFwrdAndGroupNormal * pFwrd * pGroupNormal
                     + pNonsupportMByDropAndGroupMalicious * pDrop * pGroupMalicious
                     + pNonsupportMByFwrdAndGroupMalicious * pFwrd * pGroupMalicious;
-
+                
 
                 double pGroupDropAndNormalByNonsupportM = pNonsupportMByDropAndGroupNormal * pDrop * pGroupNormal / pNonsupportM;
                 double pGroupFwrdAndNormalByNonsupportM = pNonsupportMByFwrdAndGroupNormal * pFwrd * pGroupNormal / pNonsupportM;
                 double pGroupDropAndMaliciousByNonsupportM = pNonsupportMByDropAndGroupMalicious * pDrop * pGroupMalicious / pNonsupportM;
                 double pGroupFwrdAndMaliciousByNonsupportM = pNonsupportMByFwrdAndGroupMalicious * pFwrd * pGroupMalicious / pNonsupportM;
 
-                double aNormalAndNonsupportMDAndAccept = pGroupDropAndNormalByNonsupportM * global.uA2DropAndNormalAndNonsupportMDAndAccept
-                    + pGroupFwrdAndNormalByNonsupportM * global.uA2FwrdAndNormalAndNonsupportMDAndAccept;
-                double aMaliciousAndNonsupportMDAndAccept = pGroupDropAndMaliciousByNonsupportM * global.uA2DropAndMaliciousAndNonsupportMDAndAccept
-                    + pGroupFwrdAndMaliciousByNonsupportM * global.uA2FwrdAndMaliciousAndNonsupportMDAndAccept;
+                double aNormalAndNonsupportMDAndAccept = pGroupDropAndNormalByNonsupportM * uA2DropAndNormalAndNonsupportMDAndAccept
+                    + pGroupFwrdAndNormalByNonsupportM * uA2FwrdAndNormalAndNonsupportMDAndAccept;
+                double aMaliciousAndNonsupportMDAndAccept = pGroupDropAndMaliciousByNonsupportM * uA2DropAndMaliciousAndNonsupportMDAndAccept
+                    + pGroupFwrdAndMaliciousByNonsupportM * uA2FwrdAndMaliciousAndNonsupportMDAndAccept;
 
-                double aNormalAndNonsupportMDAndReject = pGroupDropAndNormalByNonsupportM * global.uA2DropAndNormalAndNonsupportMDAndReject
-                    + pGroupFwrdAndNormalByNonsupportM * global.uA2FwrdAndNormalAndNonsupportMDAndReject;
-                double aMaliciousAndNonsupportMDAndReject = pGroupDropAndMaliciousByNonsupportM * global.uA2DropAndMaliciousAndNonsupportMDAndReject
-                    + pGroupFwrdAndMaliciousByNonsupportM * global.uA2FwrdAndMaliciousAndNonsupportMDAndReject;
+                double aNormalAndNonsupportMDAndReject = pGroupDropAndNormalByNonsupportM * uA2DropAndNormalAndNonsupportMDAndReject
+                    + pGroupFwrdAndNormalByNonsupportM * uA2FwrdAndNormalAndNonsupportMDAndReject;
+                double aMaliciousAndNonsupportMDAndReject = pGroupDropAndMaliciousByNonsupportM * uA2DropAndMaliciousAndNonsupportMDAndReject
+                    + pGroupFwrdAndMaliciousByNonsupportM * uA2FwrdAndMaliciousAndNonsupportMDAndReject;
 
                 aAccept = aNormalAndNonsupportMDAndAccept + aMaliciousAndNonsupportMDAndAccept;
                 aReject = aNormalAndNonsupportMDAndReject + aMaliciousAndNonsupportMDAndReject;
@@ -1033,25 +1462,43 @@ namespace MaliciousOrganizationDetection
                 //Console.WriteLine("pGroupNormalByNonsupportM:{0}, pDropByNonsupportM:{1}", pGroupNormal, pDropByNonsupportM);
                 //Console.WriteLine("pGroupMaliciousByNonsupportM:{0}, (1-pDropByNonsupportM):{1}", pGroupMalicious, (1 - pDropByNonsupportM));
             }
-            bool duduceIsNormal= (isReportSupportM ^ isAccept);
-            string deductionStep = (isDeduceStep2 == true) ? "DEDUCTION1-2" : "DEDUCTION1-1";
+            bool isDuduceNormalEvent= (isReportSupportM ^ isAccept);
+            string deductionStep = "";
+            if(isDeduceStep2 == false)
+                deductionStep = "DEDUCTION1-1";
+            else if(deduceNode.Neighbors.ContainsKey(suspectedNodeId))//是第二步
+                deductionStep = "DEDUCTION1-2";
+            else
+                deductionStep = "DEDUCTION1-3";
             string sAccept = (isAccept == true) ? "accept" : "reject";
             string sSupport = (isReportSupportM == true) ? "supporting" : "nonsupporting";
 
-            //这里由于真实事件都是正常的，所以直接用true代替
-            string sResult = (duduceIsNormal == true) ? "Succ" : "Fail";
-            sResult = (isDeduceStep2 == true) ? sResult : " ";
-            Console.WriteLine("{0:F4} [{1}] {2}{3} deduces {4} {5}{6} is {7} by {8}. [{9}:{10}]\t[{11}:{12}]\t[{13}:{14}]-{15}",
-                scheduler.currentTime, deductionStep, this.type, this.Id, sSupport, NodeType.READER, nodeId, sAccept, step1Node, 
-                aAccept, aReject, supportMWeight, nonsupportMWeight, supportMNodes, nonsupportMNodes, sResult);
+            //这里由于真实事件都是正常的，所以直接用true代替,ps:DropData代表正常场景下丢包
+            string sResult = (isDuduceNormalEvent != global.DropData) ? "Succ" : "Fail";
+            sResult = (isDeduceStep2 == true) ? sResult : "None";
+            //尽管在第一步中，deduction是deduceNode做的，但是我们这里写是this做的
+            Console.WriteLine("{0:F4} [{1}] {2}{3} deduces {4} {5}{6} is {7} by {8}. [{9}:{10}]\t[{11}:{12}]\t[{13}:{14}]-${15}$:{16}",
+                scheduler.currentTime, deductionStep, this.type, this.Id, sSupport, NodeType.READER, suspectedNodeId, sAccept, deduceNodeId,
+                aAccept, aReject, supportMWeight, nonsupportMWeight, supportMNodes, nonsupportMNodes, pkgIdent, sResult);
+
+            if (isDeduceStep2 == true)
+            {
+                Console.Write("{0:F4} [ORG_TRUST] {1}{2}:\t", scheduler.currentTime, this.type, this.Id);
+                for (int i = 0; i < global.orgNum; i++)
+                {
+                    Console.Write("{0}-", localNodeTrustWeights[global.orgs[i]]);
+                }
+                Console.WriteLine();
+            }
 
             //比较各个节点的报告与整体报告的差别，如果我接受整体报告，则惩罚与整体报告不同的节点(即与supportReport相反的节点)，反之亦然
-            
-            if(isDeduceStep2 == true)
-                PunishMaliciousNodes(duduceIsNormal, cachedresults);
-            //TODO
-            bool duduceIsDrop = true;
-            UpdateNodeBelieves(isReportSupportM, duduceIsNormal, duduceIsDrop, iteractions, isDeduceStep2);
+
+            if (isDeduceStep2 == true)
+            {
+                PunishMaliciousNodes(isDuduceNormalEvent, cachedresults);
+                if (this.Neighbors.ContainsKey(suspectedNodeId))
+                    UpdateNodeBelieves(isDuduceNormalEvent, pGroupNormal > 0.5, isReportSupportM, iteractions, isDeduceStep2);
+            }
 
             Deduce2Result d2r = new Deduce2Result();
             d2r.IsAccept = isAccept;
@@ -1059,11 +1506,64 @@ namespace MaliciousOrganizationDetection
             return d2r;
         }
 
+        void UpdateAwardFunction(bool mySupport, bool totalSupport, 
+                ref double uA2DropAndNormalAndSupportMDAndAccept, ref double uA2FwrdAndNormalAndSupportMDAndAccept,
+                ref double uA2DropAndMaliciousAndSupportMDAndAccept, ref double uA2FwrdAndMaliciousAndSupportMDAndAccept,
+                ref double uA2DropAndNormalAndSupportMDAndReject, ref double uA2FwrdAndNormalAndSupportMDAndReject,
+                ref double uA2DropAndMaliciousAndSupportMDAndReject, ref double uA2FwrdAndMaliciousAndSupportMDAndReject,
+                ref double uA2DropAndNormalAndNonsupportMDAndAccept, ref double uA2FwrdAndNormalAndNonsupportMDAndAccept, 
+                ref double uA2DropAndMaliciousAndNonsupportMDAndAccept, ref double uA2FwrdAndMaliciousAndNonsupportMDAndAccept,
+                ref double uA2DropAndNormalAndNonsupportMDAndReject, ref double uA2FwrdAndNormalAndNonsupportMDAndReject,
+                ref double uA2DropAndMaliciousAndNonsupportMDAndReject, ref double uA2FwrdAndMaliciousAndNonsupportMDAndReject)
+        {
+            //效用函数更新因子，如果与自己相同的话，最终的效用将增加，否则减少
+            if (global.Step2DeduceMethod == DeduceMethod.Game)
+                return;
+             //如果两者相同，则接受的因子增加
+            bool eqSP = (mySupport == totalSupport);
+            uA2DropAndNormalAndSupportMDAndAccept = UpdateValue(eqSP, true, uA2DropAndNormalAndSupportMDAndAccept);
+            uA2FwrdAndNormalAndSupportMDAndAccept = UpdateValue(eqSP, true, uA2FwrdAndNormalAndSupportMDAndAccept);
+            uA2DropAndMaliciousAndSupportMDAndAccept = UpdateValue(eqSP, true, uA2DropAndMaliciousAndSupportMDAndAccept);
+            uA2FwrdAndMaliciousAndSupportMDAndAccept = UpdateValue(eqSP, true, uA2FwrdAndMaliciousAndSupportMDAndAccept);
+            uA2DropAndNormalAndSupportMDAndReject = UpdateValue(eqSP, false, uA2DropAndNormalAndSupportMDAndReject);
+            uA2FwrdAndNormalAndSupportMDAndReject = UpdateValue(eqSP, false, uA2FwrdAndNormalAndSupportMDAndReject);
+            uA2DropAndMaliciousAndSupportMDAndReject = UpdateValue(eqSP, false, uA2DropAndMaliciousAndSupportMDAndReject);
+            uA2FwrdAndMaliciousAndSupportMDAndReject = UpdateValue(eqSP, false, uA2FwrdAndMaliciousAndSupportMDAndReject);
+            uA2DropAndNormalAndNonsupportMDAndAccept = UpdateValue(eqSP, true, uA2DropAndNormalAndNonsupportMDAndAccept);
+            uA2FwrdAndNormalAndNonsupportMDAndAccept = UpdateValue(eqSP, true, uA2FwrdAndNormalAndNonsupportMDAndAccept);
+            uA2DropAndMaliciousAndNonsupportMDAndAccept = UpdateValue(eqSP, true, uA2DropAndMaliciousAndNonsupportMDAndAccept);
+            uA2FwrdAndMaliciousAndNonsupportMDAndAccept = UpdateValue(eqSP, true, uA2FwrdAndMaliciousAndNonsupportMDAndAccept);
+            uA2DropAndNormalAndNonsupportMDAndReject = UpdateValue(eqSP,false , uA2DropAndNormalAndNonsupportMDAndReject);
+            uA2FwrdAndNormalAndNonsupportMDAndReject = UpdateValue(eqSP,false, uA2FwrdAndNormalAndNonsupportMDAndReject);
+            uA2DropAndMaliciousAndNonsupportMDAndReject = UpdateValue(eqSP, false, uA2DropAndMaliciousAndNonsupportMDAndReject);
+            uA2FwrdAndMaliciousAndNonsupportMDAndReject = UpdateValue(eqSP, false, uA2FwrdAndMaliciousAndNonsupportMDAndReject);
+        }
+
+        double UpdateValue(bool eqSP, bool accept, double v)
+        {
+            double x1 = 1.2;
+            double x2 = 0.8;
+            if (eqSP == accept) //award
+            {
+                if (v > 0)
+                    return v * x1;
+                else
+                    return v * x2;
+            }
+            else
+            {
+                if (v > 0)
+                    return v * x2;
+                else
+                    return v * x1;
+            }
+        }
+
         //更新对节点的期望值
-        public void UpdateNodeBelieves(bool isReportSupportM, bool deduceIsNormal, bool deduceIsDrop,
+        public void UpdateNodeBelieves(bool isDuduceNormalEvent, bool isNodeNormal, bool isReportSupportM, 
             List<IteratorType> iterations, bool isDeduceStep2)
         {
-            iterations.Add(new IteratorType(deduceIsDrop, deduceIsNormal, isReportSupportM));
+            iterations.Add(new IteratorType(isDuduceNormalEvent, isNodeNormal, isReportSupportM));
         }
 
         //惩罚函数，supportEventIsMalicious是整体报告支持事件是否是恶意的
@@ -1089,23 +1589,48 @@ namespace MaliciousOrganizationDetection
             if (global.debug)
                 Console.WriteLine();
 
-            //这里就不通过发数据包了，直接更改邻居节点的评价了
-            foreach (int nbId in this.Neighbors.Keys)
+            //这里就不通过发数据包了，直接更改报告节点的评价了
+            //foreach (int nbId in this.Neighbors.Keys)
+            foreach (MODReader reportNode in results.Keys)
             {
-                //如果邻居
-                MODReader nbNode = (MODReader)global.readers[nbId];
-                if (results.ContainsKey(nbNode))
+                foreach (MODReader nbNode1 in results.Keys)
                 {
-                    if (!nbNode.pNBNormal.ContainsKey(this))
-                        nbNode.pNBNormal.Add(this, new Dictionary<Node, double>());
-                    if (!nbNode.pNBNormal[this].ContainsKey(nbNode))
-                        nbNode.pNBNormal[this].Add(nbNode, global.pInitNormal);
-                    if (duduceIsNormal == (results[nbNode].supportDroppingMalicious < 0))
-                        nbNode.pNBNormal[this][nbNode] *= global.RewardFactor;
+                    if (!reportNode.pNBNormal.ContainsKey(this))
+                        reportNode.pNBNormal.Add(this, new Dictionary<Node, double>());
+                    if (!reportNode.pNBNormal[this].ContainsKey(nbNode1))
+                        reportNode.pNBNormal[this].Add(nbNode1, global.pInitNormal);
+                    if (duduceIsNormal == (results[nbNode1].supportDroppingMalicious < 0))
+                        reportNode.pNBNormal[this][nbNode1] *= global.RewardFactor;
                     else
-                        nbNode.pNBNormal[this][nbNode] *= global.PunishmentFactor;
+                        reportNode.pNBNormal[this][nbNode1] *= global.PunishmentFactor;
+                }
+                if (global.Interactive)
+                {
+                    if (!reportNode.NBNodeTrustWeights.ContainsKey(this))
+                    {
+                        reportNode.NBNodeTrustWeights.Add(this, new Dictionary<Node, double>());
+                        reportNode.NBNodeTrustWeightsLastUpdate.Add(this, new Dictionary<Node, double>());
+                        reportNode.NBNodeSuspectCount.Add(this, new Dictionary<Node, List<double>>());
+                        reportNode.NBNodeHistoryMyVariance.Add(this, new Dictionary<Node, List<double>>());
+                        reportNode.NBNodeHistoryTotalVariance.Add(this, new Dictionary<Node, List<double>>());
+                    }
+
+
+                    for (int i = 0; i < global.orgNum; i++)
+                    {
+                        Organization org = global.orgs[i];
+                        if (!reportNode.NBNodeTrustWeights[this].ContainsKey(org))
+                            reportNode.NBNodeTrustWeights[this].Add(org, this.nodeTrustWeights[org]);
+                        else
+                            reportNode.NBNodeTrustWeights[this][org] = this.nodeTrustWeights[org];
+                        if (!reportNode.NBNodeTrustWeightsLastUpdate[this].ContainsKey(org))
+                            reportNode.NBNodeTrustWeightsLastUpdate[this].Add(org, scheduler.currentTime);
+                        else
+                            reportNode.NBNodeTrustWeightsLastUpdate[this][org] = scheduler.currentTime;
+                    }
                 }
             }
+            
         }
 
 
@@ -1115,28 +1640,77 @@ namespace MaliciousOrganizationDetection
             int suspectedNodeId = p.nodeId;            
             List<MODEventTrustResult> results = new List<MODEventTrustResult>();
 
-            //TODO,这里假设只考虑节点1
-            if (p.pkg.Prev != 1)
-                return;
+            string pkgIdent = MODEventTrust.GetPacketIdent(p.pkg);
 
-            MODEventTrustResult result = GetEventTrustResult(p, results, suspectedNodeId, this.Id);
-
-            if (global.debug)
-                Console.Write("[Debug] node{0} CheckReceivedPacket of {1} of reader{2}\t", this.Id, MODEventTrust.GetPacketIdent(p.pkg), result.node);
-            
-            string pkgIdent = result.eventIdent;
-            if (!this.receivedEventReports.ContainsKey(pkgIdent))
+            MODEventTrustResult realr = null;
+            if (p == null)//没观察到接收数据包，则不确定
             {
-                this.receivedEventReports.Add(pkgIdent, new Dictionary<Node, MODEventTrustResult>());
-                this.receivedEventReports[pkgIdent].Add(this, result);
+                string[] x = pkgIdent.Split(new char[] { '-', '>' });
+                int prevId = int.Parse(x[0]);
+                Reader suspectedNode = global.readers[suspectedNodeId];
+                Reader prevNode = global.readers[prevId];
+                double[] speeds = new double[3];
+                if (this.Speed != null)
+                    speeds[0] = this.Speed[0];
+                if (suspectedNode.Speed != null)
+                    speeds[1] = suspectedNode.Speed[0];
+                if (prevNode.Speed != null)
+                    speeds[2] = prevNode.Speed[0];
+                bool[] isNeighbors = new bool[2] { this.Neighbors.ContainsKey(prevId), this.Neighbors.ContainsKey(suspectedNodeId) };
+
+                realr = MODEventTrust.NotObservedEventTrustResult(suspectedNodeId, this.Id,
+                            pkgIdent, MODEventCategoryType.DropPacket, speeds, isNeighbors);
+            }
+            else
+            {
+                realr = MODEventTrust.DeduceDropPacketMaliciouslyByPacket(this.Id, this.observedPhenomemons, scheduler.currentTime, p);
             }
 
             //正常节点或异常节点，如果正常事件，则不报告            
-            if (result.supportDroppingMalicious <= 0 && !this.IsMalicious())//normal
+            if (!this.IsMalicious() && (realr.supportDroppingMalicious <= 0 || global.DropData == false))//normal
                 return;
+            //如果是恶意节点，事件也是恶意的，也不报告
+            if (this.IsMalicious() && (realr.supportDroppingMalicious > 0 || global.DropData == true))//malicious
+                return;
+
+            MODEventTrustResult myresult = null;
+
+            if (global.debug)
+                Console.Write("[Debug] node{0} CheckReceivedPacket of {1} of reader{2}\t", this.Id, MODEventTrust.GetPacketIdent(p.pkg), myresult.nodeId);
+
+            if (pkgIdent != global.currentPkgIdent)
+            {
+                if (scheduler.currentTime - global.currentPkgIdentUpdate > 4)
+                {
+                    global.currentPkgIdentUpdate = scheduler.currentTime;
+                    global.currentPkgIdent = pkgIdent;
+                }
+                else
+                    return;
+            }
+
+
+            if (!this.receivedEventReports.ContainsKey(pkgIdent))
+                this.receivedEventReports.Add(pkgIdent, new Dictionary<Node, MODEventTrustResult>());
+            if (this.receivedEventReports[pkgIdent].ContainsKey(this))
+            {
+                myresult = this.receivedEventReports[pkgIdent][this];
+            }
+            else
+            {
+                myresult = GetEventTrustResult(pkgIdent, p, results, suspectedNodeId, this.Id, realr);
+                this.receivedEventReports[pkgIdent].Add(this, myresult);
+            }
+
+            //如果我是恶意节点，我推测和真实事件一致，也不报告
+            if (this.IsMalicious() && (myresult.supportDroppingMalicious == realr.supportDroppingMalicious))//malicious
+                return;
+
 
             //报告恶意事件
             //过一段时间转发事件报告
+            Console.WriteLine("Reader{0} inits an event report, suspected node is {1}", this.Id, myresult.nodeId);
+
             Event.AddEvent(new Event(scheduler.currentTime + 0.05f, EventType.FWD_EVENT_REPORT, this, pkgIdent));
             //如果是正常的观测节点，过一段时间检查所有邻居对该事件的报告
             if (!this.IsMalicious() && !this.toDeducedEventReports.Contains(pkgIdent))
@@ -1161,16 +1735,18 @@ namespace MaliciousOrganizationDetection
                 return;
             }
 
-            //发给自己的报告
             MemoryStream ms = new MemoryStream(pkg.TrustReport.result);
             BinaryFormatter formatter = new BinaryFormatter();
             List<MODEventTrustResult> results = (List<MODEventTrustResult>)formatter.Deserialize(ms);
 
             string pkgIdent = results[0].eventIdent;
-            int suspectedNodeId = results[0].node;
-            if (!this.Neighbors.ContainsKey(suspectedNodeId))
-                return;
+            int suspectedNodeId = results[0].nodeId;
 
+
+
+            if (!global.monitoredNodes.Contains(suspectedNodeId))
+                throw new Exception("monitor node does not contain "+ suspectedNodeId);
+            
             if (global.debug)
             {
                 Console.Write("READER{0} recv {1} reports. ident:{2}\t", Id, results.Count, pkgIdent);
@@ -1185,7 +1761,7 @@ namespace MaliciousOrganizationDetection
             {
                 this.receivedEventReports.Add(pkgIdent, new Dictionary<Node, MODEventTrustResult>());
             }
-
+            
 
             int newcount = 0;            
 
@@ -1208,10 +1784,24 @@ namespace MaliciousOrganizationDetection
             if (newcount == 0)//和以前的一样，返回即可
                 return;
 
+            //这里先注释掉，看看非邻居的效果
+
+            //非邻居节点，则直接定时判断
+            if (!this.Neighbors.ContainsKey(suspectedNodeId))
+            {
+                if (!this.IsMalicious() && !this.toDeducedEventReports.Contains(pkgIdent))
+                {
+                    Event.AddEvent(new Event(scheduler.currentTime + global.checkPhenomemonTimeout, EventType.DEDUCE_EVENT, this, pkgIdent));
+                    this.toDeducedEventReports.Add(pkgIdent);
+                }
+                return;
+            }
+
+
             if (!cachedresults.ContainsKey(this))
             {
                 MODPhenomemon p = MODEventTrust.GetPhenomemon(pkgIdent, this.Id, this.observedPhenomemons);
-                MODEventTrustResult myresult = GetEventTrustResult(p, cachedresults.Values.ToList(), suspectedNodeId, this.Id);                
+                MODEventTrustResult myresult = GetEventTrustResult(pkgIdent, p, cachedresults.Values.ToList(), suspectedNodeId, this.Id);
                 cachedresults.Add(this, myresult);
                 //TODO 这里涉及到没有观察到收到数据包，应该是不支持节点异常的 myresult.normal = //;
             }
@@ -1220,7 +1810,7 @@ namespace MaliciousOrganizationDetection
                 MODPhenomemon p = MODEventTrust.GetPhenomemon(pkgIdent, this.Id, this.observedPhenomemons);
                 if (p != null)
                 {
-                    MODEventTrustResult myresult = GetEventTrustResult(p, cachedresults.Values.ToList(), suspectedNodeId, this.Id);
+                    MODEventTrustResult myresult = GetEventTrustResult(pkgIdent, p, cachedresults.Values.ToList(), suspectedNodeId, this.Id);
                     cachedresults[this] = myresult;
                 }
             }
@@ -1312,6 +1902,15 @@ namespace MaliciousOrganizationDetection
             if (pkg.Prev == Id && pkg.PrevType == type)
             {
                 return;
+            }
+
+            if (this.IsMalicious() && pkg.Dst != Id)
+            {
+                if (pkg.Type == PacketType.DATA && global.DropData == true)
+                {
+                    Console.WriteLine("{0:F4} [{1}] {2}{3} Drop data of {4}{5} due to bad node. packet ident:{6}", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev, pkg.getId());
+                    return;
+                }
             }
 
             switch (pkg.Type)

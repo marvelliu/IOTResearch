@@ -114,9 +114,12 @@ namespace HeterogeneousForward
             {
                 HFReader reader = (HFReader)global.readers[i];
                 //brush = new SolidBrush(Organization.colors[reader.OrgId]);
-                if (reader.isSwHub == true)
-                    brush = new SolidBrush(Color.Red);
-                else if (reader.IsAllowedTags(global.currentSendingTags) && global.currentSendingTags != 0)
+
+                float r1 = r;
+                if (reader.IsHub())
+                    r1 = r * 1.5f;
+
+                if (reader.IsAllowedTags(global.currentSendingTags) && global.currentSendingTags != 0)
                     brush = new SolidBrush(Color.Blue);
                 else
                     brush = new SolidBrush(Color.Black);
@@ -124,8 +127,8 @@ namespace HeterogeneousForward
                 gc.DrawString("R" + reader.Id.ToString(), new Font("arial", 10), brush,
                     (float)reader.X + (float)offsetX, (float)reader.Y + (float)offsetY);
 
-                gc.FillEllipse(brush, (float)reader.X - r / 2 + offsetX,
-                    (float)reader.Y - r / 2 + offsetY, r, r);
+                gc.FillEllipse(brush, (float)reader.X - r1 / 2 + offsetX,
+                    (float)reader.Y - r1 / 2 + offsetY, r1, r1);
 
 
                 pen = new Pen(brush);

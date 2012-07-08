@@ -34,7 +34,6 @@
             this.presetToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.initToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.generateReaderMotionToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.generateObjectMotionsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.generateSendDataToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.reloadEventsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.mainToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -76,7 +75,6 @@
             this.presetToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.initToolStripMenuItem,
             this.generateReaderMotionToolStripMenuItem,
-            this.generateObjectMotionsToolStripMenuItem,
             this.generateSendDataToolStripMenuItem,
             this.reloadEventsToolStripMenuItem});
             this.presetToolStripMenuItem.Name = "presetToolStripMenuItem";
@@ -86,35 +84,28 @@
             // initToolStripMenuItem
             // 
             this.initToolStripMenuItem.Name = "initToolStripMenuItem";
-            this.initToolStripMenuItem.Size = new System.Drawing.Size(208, 22);
+            this.initToolStripMenuItem.Size = new System.Drawing.Size(202, 22);
             this.initToolStripMenuItem.Text = "Init";
             this.initToolStripMenuItem.Click += new System.EventHandler(this.initToolStripMenuItem_Click);
             // 
             // generateReaderMotionToolStripMenuItem
             // 
             this.generateReaderMotionToolStripMenuItem.Name = "generateReaderMotionToolStripMenuItem";
-            this.generateReaderMotionToolStripMenuItem.Size = new System.Drawing.Size(208, 22);
+            this.generateReaderMotionToolStripMenuItem.Size = new System.Drawing.Size(202, 22);
             this.generateReaderMotionToolStripMenuItem.Text = "Generate Reader Motion";
             this.generateReaderMotionToolStripMenuItem.Click += new System.EventHandler(this.generateReaderMotionToolStripMenuItem_Click);
-            // 
-            // generateObjectMotionsToolStripMenuItem
-            // 
-            this.generateObjectMotionsToolStripMenuItem.Name = "generateObjectMotionsToolStripMenuItem";
-            this.generateObjectMotionsToolStripMenuItem.Size = new System.Drawing.Size(208, 22);
-            this.generateObjectMotionsToolStripMenuItem.Text = "Generate Object Motions";
-            this.generateObjectMotionsToolStripMenuItem.Click += new System.EventHandler(this.generateObjectMotionsToolStripMenuItem_Click);
             // 
             // generateSendDataToolStripMenuItem
             // 
             this.generateSendDataToolStripMenuItem.Name = "generateSendDataToolStripMenuItem";
-            this.generateSendDataToolStripMenuItem.Size = new System.Drawing.Size(208, 22);
+            this.generateSendDataToolStripMenuItem.Size = new System.Drawing.Size(202, 22);
             this.generateSendDataToolStripMenuItem.Text = "Generate Send Data";
             this.generateSendDataToolStripMenuItem.Click += new System.EventHandler(this.generateSendDataToolStripMenuItem_Click);
             // 
             // reloadEventsToolStripMenuItem
             // 
             this.reloadEventsToolStripMenuItem.Name = "reloadEventsToolStripMenuItem";
-            this.reloadEventsToolStripMenuItem.Size = new System.Drawing.Size(208, 22);
+            this.reloadEventsToolStripMenuItem.Size = new System.Drawing.Size(202, 22);
             this.reloadEventsToolStripMenuItem.Text = "Reload Events";
             this.reloadEventsToolStripMenuItem.Click += new System.EventHandler(this.reloadEventsToolStripMenuItem_Click);
             // 
@@ -171,7 +162,6 @@
         private System.Windows.Forms.ToolStripMenuItem mainToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem startToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem stopToolStripMenuItem;
-        private System.Windows.Forms.ToolStripMenuItem generateObjectMotionsToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem generateSendDataToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem generateReaderMotionToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem reloadEventsToolStripMenuItem;

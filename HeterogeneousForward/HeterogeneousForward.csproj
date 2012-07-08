@@ -49,9 +49,11 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CBReader.cs" />
     <Compile Include="ForwardStrategy.cs" />
     <Compile Include="HFEventGenerator.cs" />
     <Compile Include="HFNeighbor.cs" />
+    <Compile Include="HFReader.cs" />
     <Compile Include="HFScheduler.cs" />
     <Compile Include="MainForm.cs">
       <SubType>Form</SubType>
@@ -62,7 +64,7 @@
     <Compile Include="HFGlobal.cs" />
     <Compile Include="HFOrganization.cs" />
     <Compile Include="HFEventManager.cs" />
-    <Compile Include="HFReader.cs" />
+    <Compile Include="SWReader.cs" />
     <Compile Include="MoveForm.cs">
       <SubType>Form</SubType>
     </Compile>
