@@ -49,7 +49,13 @@ namespace AdHocBaseApp
 
         public Reader[] readers = null;
         public int readerNum = -1;
-        public bool listenNeighborAODVReply = false;
+
+        //如果AODV reply是给邻居的，那本节点就不做处理
+        //public bool IngoreNeigbhorAODVReply = true;
+        //public bool IngoreNeigbhorAODVReply = false;
+
+        //public bool listenNeighborAODVReply = false;
+        public bool listenNeighborAODVReply = true;
 
         public Organization[] orgs = new Organization[0];
 
@@ -111,8 +117,6 @@ namespace AdHocBaseApp
 
         public double[] orgRatio = null;
 
-        //如果AODV reply是给邻居的，那本节点就不做处理
-        public bool IngoreNeigbhorAODVReply = true;
 
 
 
@@ -254,6 +258,8 @@ namespace AdHocBaseApp
                 TTL = int.Parse(v[1]);
             else if (v[0] == "nodraw")
                 nodraw = bool.Parse(v[1]);
+            else if (v[0] == "listenNeighborAODVReply")
+                listenNeighborAODVReply = bool.Parse(v[1]);
             else if (v[0] == "debug")
                 debug = bool.Parse(v[1]);
             else if (v[0] == "routeMethod")

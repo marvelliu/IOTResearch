@@ -40,6 +40,8 @@ namespace AdHocBaseApp
         float endTime;
         Thread thread;
         public float currentTime;
+
+        private DateTime startDateTime;
         
         Scheduler(float step, float start, float end)
         {
@@ -51,6 +53,7 @@ namespace AdHocBaseApp
         //在模拟器结束的时候处理的事件
         public virtual void EndProcess()
         {
+            Console.WriteLine("{0} [TOTAL_PKT] {1}", currentTime, global.PacketSeq);
             Console.WriteLine("Simulation ends");
         }
 
@@ -59,15 +62,21 @@ namespace AdHocBaseApp
             Console.WriteLine("Simulation start");
             thread = new Thread(new ThreadStart(StartThread));
             thread.Start();
+            this.startDateTime = DateTime.Now;
+            Console.WriteLine("Current time:{0}", this.startDateTime);
         }
 
         public void Stop()
         {
+            EndProcess();
             if (thread != null && thread.IsAlive)
             {
-                EndProcess();
                 thread.Abort();
             }
+
+            Console.WriteLine("Current time:{0}", DateTime.Now);
+            TimeSpan duration = DateTime.Now.Subtract(this.startDateTime);
+            Console.WriteLine("Total duration: {0}h {0}m", duration.Hours, duration.Minutes);
         }
 
         public bool Started()
@@ -92,15 +101,15 @@ namespace AdHocBaseApp
                 global.mainForm.Invalidate();
             }
 
-            Console.WriteLine("{0} [TOTAL_PKT] {1}", currentTime ,global.PacketSeq);
-
             quitDele q = global.mainForm.Quit;
             if (global.automatic)
             {
                 Thread.Sleep(500);
                 global.mainForm.Invoke(q);
             }
+            Stop();
         }
+
 
         public delegate void quitDele();
 
@@ -117,7 +126,7 @@ namespace AdHocBaseApp
                 case EventType.SND_DATA:
                     Packet pkg = (Packet)e.Obj;
                     if (pkg.SrcSenderSeq < 0 && node.type == NodeType.READER)//未定该数据包的id
-                        ((Reader)node).initPacketSeq(pkg);
+                        ((Reader)node).InitPacketSeq(pkg);
                     node.SendData(pkg);
                     break;
                 case EventType.CHK_NB:
@@ -141,7 +150,7 @@ namespace AdHocBaseApp
         {
             MoveMobileNodes();
             float time = currentTime;
-            while (global.events.Count > 0 && global.events[0].Time < time + step)
+            while (global.events.Count > 0 && global.events[0].Time < time + step && global.events[0].Time<endTime)
             {
                 Event e = global.events[0];
                 Node node = e.Node;

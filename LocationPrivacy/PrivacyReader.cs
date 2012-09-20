@@ -53,10 +53,11 @@ namespace LocationPrivacy
     public class NativeGroupResponseEntry
     {
         public int nodeId;
-        public int h;
+        public int h; //当前节点到目的节点的跳数+1
         public int origId;
         public int k;
-        public int h0;
+        public int h0;//设定的跳数阈值
+        public bool avail; //在返回信息的时候，指示该节点是否可被加入k-组
         public NativeGroupResponseEntry(int nodeId, int h, int h0, int origId, int k)
         {
             this.nodeId = nodeId;
@@ -64,6 +65,17 @@ namespace LocationPrivacy
             this.origId = origId;
             this.h0 = h0;
             this.k = k;
+            this.avail = true;
+        }
+
+        public NativeGroupResponseEntry(int nodeId, int h, int h0, int origId, int k, bool avail)
+        {
+            this.nodeId = nodeId;
+            this.h = h;
+            this.origId = origId;
+            this.h0 = h0;
+            this.k = k;
+            this.avail = avail;
         }
     }
 
@@ -102,17 +114,17 @@ namespace LocationPrivacy
         }
     }
 
-    class AnonyGroupEntry
+    public class AnonyGroupEntry
     {
-        public List<int> ks;
+        public List<int> ks; //正在处理的k组
 
-        public Dictionary<int, HashSet<int>> group;
+        public Dictionary<int, HashSet<int>> groups;
         //public Dictionary<string, HashSet<int>> subgroup;//子树中的匿名组，key为id+k
-        public Dictionary<string, HashSet<int>> subUnavailAnonyNodes; //子节点每个k对应已加入的子树节点数，key为"子节点id+k"
+        public Dictionary<string, HashSet<int>> subUnavailAnonyNodes; //子节点每个k对应已加入的子树节点，key为"子节点id+k",value为这个子节点下k值不可用的节点
         public AnonyGroupEntry()
         {
             this.ks = new List<int>();
-            this.group = new Dictionary<int, HashSet<int>>();
+            this.groups = new Dictionary<int, HashSet<int>>();
             //this.subgroup = new Dictionary<string, HashSet<int>>();
             this.subUnavailAnonyNodes = new Dictionary<string, HashSet<int>>();
         }
@@ -155,7 +167,12 @@ namespace LocationPrivacy
         Dictionary<string, AnonyRegionEntry> CachedRegionEntries = new Dictionary<string, AnonyRegionEntry>();
         public Dictionary<string, AnonyTreeEntry> CachedTreeEntries = new Dictionary<string, AnonyTreeEntry>();
         Dictionary<int, DistanceEntry> CachedDistEntries = new Dictionary<int,DistanceEntry>();
-        AnonyGroupEntry AnonGroups = new AnonyGroupEntry();
+        public AnonyGroupEntry anonGroups = new AnonyGroupEntry();
+
+        static public PrivacyReader rootReader;
+        
+        //设框结构是全局的，事实上节点间共享该结构，我们为了简化设为static的
+        public static FrameList AnonFrames = new FrameList();
 
         public Dictionary<string, Dictionary<int, NativeGroupResponseEntry>> pendingNativeGroupResponses = new Dictionary<string, Dictionary<int, NativeGroupResponseEntry>>();
         public int requestNode = -1;
@@ -180,24 +197,37 @@ namespace LocationPrivacy
 
         int SelectOneFromGroup()
         {
-            if (this.AnonGroups.group.Count == 0)//选择最小的
-                return 0;
-            int maxg = this.AnonGroups.group.First().Key;
-            foreach (KeyValuePair<int, HashSet<int>> pair in this.AnonGroups.group)
+            if (this.anonGroups.groups.Count == 0)//选择最小的
+                return -1;
+            int maxg = this.anonGroups.groups.First().Key;
+            foreach (KeyValuePair<int, HashSet<int>> pair in this.anonGroups.groups)
             {
                 int k = pair.Key;
                 HashSet<int> group = pair.Value;
-                if (group.Count > this.AnonGroups.group[maxg].Count)
+                if (group.Count > this.anonGroups.groups[maxg].Count)
                     maxg = k;
             }
-            //选择组内最小的吧
+            Random r = new Random((int)scheduler.currentTime+this.Id);
+            int count = this.anonGroups.groups[maxg].Count;
+            int x = r.Next(count);
+            int i = 0;
+            foreach (int nodeId in this.anonGroups.groups[maxg])
+            {
+                if (i >= x)
+                    return nodeId;
+                i++;
+            }
+            return -1;
+
+            /*//选择组内最小的吧
             int min = 1000;
-            foreach (int nodeId in this.AnonGroups.group[maxg])
+            foreach (int nodeId in this.anonGroups.groups[maxg])
             {
                 if (nodeId < min)
                     min = nodeId;
             }
             return min;
+             * */
             /*
             foreach (HashSet<int> group in this.AnonGroups.group.Values)
             {
@@ -248,20 +278,20 @@ namespace LocationPrivacy
 
             if (random > 0)//需要从匿名组中随机选择一个节点
             {
-                int nodeId = SelectOneFromGroup();
+                int nodeId = PrivacyReader.rootReader.SelectOneFromGroup();
                 PrivacyReader reader = (PrivacyReader)Node.getNode(nodeId, NodeType.READER);
                 if(reader !=null)
                     reader.JoinAnonyGroup(new GroupArgs(k, L, 0));
                 return;
             }
 
-            if (!this.AnonGroups.ks.Contains(k))
-                this.AnonGroups.ks.Add(k);
+            if (!this.anonGroups.ks.Contains(k))
+                this.anonGroups.ks.Add(k);
             //this.AnonGroups.group.Add(k, new HashSet<int>());
 
 
             //native 方法
-            if (global.nativeMethod == 1)
+            if (global.method == 1)
             {
                 this.lastesth = 2;
                 Console.WriteLine("{0:F4} [JOIN_ANON_GROUP] {1}{2} start to join group k={3}, l={4}. [IN]", scheduler.currentTime, this.type, this.Id, k, this.lastesth);
@@ -274,24 +304,28 @@ namespace LocationPrivacy
             }
 
             //是否建立了匿名树
-            int groupRoot = -1;
+            int groupTreeRoot = -1;
             foreach (KeyValuePair<string, AnonyTreeEntry> pair in this.CachedTreeEntries)
             {
                 AnonyTreeEntry subTreeInfo = pair.Value;
                 if (subTreeInfo.rootId > 0 && subTreeInfo.status != SubNodeStatus.OUTSIDE)
                 {
-                    groupRoot = subTreeInfo.rootId;
+                    groupTreeRoot = subTreeInfo.rootId;
                     break;
                 }
             }
 
             //如果建立了匿名树，则不是第一次，或者是native2的方法，那也先获取频繁子集
             HashSet<int> freqSet = new HashSet<int>();
-            if (groupRoot >= 0 || global.nativeMethod == 2)
+            //if (groupRoot >= 0 || global.nativeMethod == 2)            
+            //第二种方法， native2
+            if (global.method == 2)
             {
+                Console.WriteLine("{0:F4} [JOIN_ANON_GROUP] {1}{2} start to join group k={3}, l={4}. [IN]", scheduler.currentTime, this.type, this.Id, k, this.lastesth);
+
                 //比较现有匿名组中出现次数最多的节点
                 Dictionary<int, int> h = new Dictionary<int, int>();
-                foreach (KeyValuePair<int, HashSet<int>> pair in this.AnonGroups.group)
+                foreach (KeyValuePair<int, HashSet<int>> pair in this.anonGroups.groups)
                 {
                     int k1 = pair.Key;
                     HashSet<int> g = pair.Value;
@@ -302,6 +336,7 @@ namespace LocationPrivacy
                         h[n]++;
                     }
                 }
+
                 int[] sortedh = Utility.SortDictionary(h);
                 int num = 0;
                 for (int i = 0; i < sortedh.Length; i++)
@@ -313,6 +348,22 @@ namespace LocationPrivacy
                     //如果出现的次数小于阈值，则忽略
                     if (h[sortedh[i]] < 1)
                         continue;
+                    //查找该节点是否已在其他k-匿名组中了
+                    if (groupTreeRoot >= 0)
+                    {
+                        bool found = false;
+                        foreach (int c in this.CachedTreeEntries[groupTreeRoot + ""].subtree.Keys)
+                        {
+                            string key1 = c + "-" + k;
+                            if (!this.anonGroups.subUnavailAnonyNodes.ContainsKey(key1))
+                            {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (found == true)
+                            continue;
+                    }
                     freqSet.Add(sortedh[i]);
                     num++;
                 }
@@ -321,12 +372,6 @@ namespace LocationPrivacy
                     freqSet.Remove(freqSet.Last());
                     freqSet.Add(this.Id);
                 }
-            }
-
-            //第二种方法， native2
-            if (global.nativeMethod == 2)
-            {
-                Console.WriteLine("{0:F4} [JOIN_ANON_GROUP] {1}{2} start to join group k={3}, l={4}. [IN]", scheduler.currentTime, this.type, this.Id, k, this.lastesth);
 
                 if (freqSet.Count == 0)
                 {
@@ -342,7 +387,7 @@ namespace LocationPrivacy
                 {
                     this.cachedCandidateNodes.Add(k, new HashSet<int>());
                     foreach (int x in freqSet)
-                        SendSetLongNativeGroupRequest(this.Id, k, x);
+                        SendSetLongNativeGroupRequest(this.Id, k, 0, x);
 
                     string groupident = this.Id + "-" + k;
                     this.pendingNativeGroupResponses.Add(groupident, new Dictionary<int, NativeGroupResponseEntry>());
@@ -352,26 +397,32 @@ namespace LocationPrivacy
                 return;
             }
 
+            //否则，为我们改进的方法
             int rootId = this.Id;
             string key = rootId+"";
-            if (groupRoot < 0)//本节点未在匿名组中
+            if (groupTreeRoot < 0)//本节点未在匿名树中，新建树，再建组
             {
                 Console.WriteLine("{0:F4} [JOIN_ANON_GROUP] {1}{2} start to join group k={3}, l={4}. [IN]", scheduler.currentTime, this.type, this.Id, k, L);
+                
                 int hops = 0;
                 int m = -1;
-                this.CachedRegionEntries.Add(key, new AnonyRegionEntry(rootId, hops));
-                this.CachedDistEntries.Add(this.Id, new DistanceEntry(this.Id, 0, scheduler.currentTime));
+
+                //if (!this.CachedRegionEntries.ContainsKey(key))
+                    this.CachedRegionEntries.Add(key, new AnonyRegionEntry(rootId, hops));
+                //if(!this.CachedDistEntries.ContainsKey(this.Id))
+                    this.CachedDistEntries.Add(this.Id, new DistanceEntry(this.Id, 0, scheduler.currentTime));
                 //init
                 double includedAngle = global.includedAngle;
                 SendTreeGroupRequest(rootId,m, L, 0, 0, 0);
-                this.CachedTreeEntries.Add(key, new AnonyTreeEntry(rootId, null, m));
+                //if(!this.CachedTreeEntries.ContainsKey(key))
+                    this.CachedTreeEntries.Add(key, new AnonyTreeEntry(rootId, null, m));
                 this.CachedTreeEntries[key].status = SubNodeStatus.NORMAL;
             }
             else
             {
                 Console.WriteLine("{0:F4} [JOIN_ANON_GROUP] {1}{2} start to join group k={3}, l={4}. [OUT]", scheduler.currentTime, this.type, this.Id, k, L);
                 //之前建立过匿名组，在原有的匿名树的基础上新建一个
-                ProcessAddNewGroupCandidatesRequest(groupRoot, k, this.Id, freqSet, L, 0, 0, 0, null);
+                ProcessNewGroupRequest(groupTreeRoot, k, this.Id, L, 0, 0, 0, null);
                 //ProcessNewGroup(groupRoot, k, k, this.id, id);
             }
         }
@@ -385,17 +436,37 @@ namespace LocationPrivacy
         }*/
 
 
-        public void SendSetLongNativeGroupRequest(int origId, int k, int dstId)
+        public void SendSetLongNativeGroupRequest(int origId, int k, int hop, int dstId)
         {
             this.retryOnSendingFailture = true;
             Packet pkg = new Packet(this, Node.getNode(dstId, NodeType.READER), PacketType.NATIVE_LONG_GROUP_REQUEST);
-            pkg.Data = k;
+            pkg.Data = new SetLongNativeGroupRequestField(k, hop);
             SendData(pkg);
             this.retryOnSendingFailture = false;
         }
 
         public void RecvSetLongNativeGroupRequest(Packet pkg)
         {
+            if (pkg.Next != this.Id && pkg.Next!= BroadcastNode.Node.Id)
+                return;
+
+            int srcNodeId = pkg.Src;
+            SetLongNativeGroupRequestField req = (SetLongNativeGroupRequestField)pkg.Data;
+            int k = req.k;
+            req.hop++;
+
+            //在路由表缓存中可以添加，因为是实时的
+            if (this.routeTable.ContainsKey(srcNodeId))
+            {
+                routeTable[srcNodeId].next = pkg.Prev;
+                routeTable[srcNodeId].hops = req.hop;
+                routeTable[srcNodeId].localLastUpdatedTime = scheduler.currentTime;
+                routeTable[srcNodeId].remoteLastUpdatedTime = scheduler.currentTime;
+            }
+            else
+                routeTable.Add(srcNodeId, new RouteEntity(srcNodeId, pkg.Prev, req.hop, scheduler.currentTime, scheduler.currentTime));
+            
+
             if (this.Id != pkg.Dst && pkg.Dst != BroadcastNode.Node.Id)
             {
                 this.retryOnSendingFailture = true;
@@ -403,9 +474,8 @@ namespace LocationPrivacy
                 this.retryOnSendingFailture = false;
                 return;
             }
-            Console.WriteLine("{0}", pkg.Data);
-            int k = (int)pkg.Data;
-            if (this.AnonGroups.group.ContainsKey(k))
+
+            if (this.anonGroups.groups.ContainsKey(k))
                 SendSetLongNativeGroupResponse(false, k, pkg.Src);
             else
                 SendSetLongNativeGroupResponse(true, k, pkg.Src);
@@ -423,6 +493,8 @@ namespace LocationPrivacy
         
         public void RecvSetLongNativeGroupResponse(Packet pkg)
         {
+            if (pkg.Next != this.Id && pkg.Next!= BroadcastNode.Node.Id)
+                return;
             if (this.Id != pkg.Dst && pkg.Dst != BroadcastNode.Node.Id)
             {
                 this.retryOnSendingFailture = true;
@@ -438,6 +510,10 @@ namespace LocationPrivacy
             {
                 Console.WriteLine("Reader{0} has no cached {1} candidate group", this.Id, k);
                 return;
+            }
+            else if (avail == false)
+            {
+                Console.WriteLine("Reader{0} is unavailable for candidate {1}-group", pkg.Src, k);
             }
             else if (!this.cachedCandidateNodes[k].Contains(pkg.Src))
             {
@@ -466,12 +542,12 @@ namespace LocationPrivacy
             string[] l = groupident.Split('-');    //string groupident = this.id + "-" + k + "-" + this.lastesth;
             int k = int.Parse(l[1]);
 
-            if (this.AnonGroups.group.ContainsKey(k))
+            if (this.anonGroups.groups.ContainsKey(k))
                 return;
 
             if (this.cachedCandidateNodes[k].Count >= k)//可以建立匿名组了
             {
-                this.AnonGroups.ks.Remove(k);
+                this.anonGroups.ks.Remove(k);
                 HashSet<int> set = new HashSet<int>();
                 set.Add(this.Id);
                 int i = 1;
@@ -482,8 +558,9 @@ namespace LocationPrivacy
                     set.Add(nodeId);
                     i++;
                 }
-                this.AnonGroups.group.Add(k, set);
+                this.anonGroups.groups.Add(k, set);
                 PrintGroupNodes(set);
+                PrivacyReader.rootReader = this;
                 foreach (int nodeId in set)
                     SendSetGroup(this.Id, this.Id, k, nodeId, set, new HashSet<int>(){nodeId});
                 return;
@@ -513,6 +590,8 @@ namespace LocationPrivacy
 
         public void RecvNativeGroupRequest(Packet pkg)
         {
+            if (pkg.Next != this.Id && pkg.Next!= BroadcastNode.Node.Id)
+                return;
             if (this.Id != pkg.Dst && pkg.Dst!= BroadcastNode.Node.Id)
             {
                 this.retryOnSendingFailture = true;
@@ -536,20 +615,22 @@ namespace LocationPrivacy
             this.requestNode = pkg.Prev;
             //Console.WriteLine("request node:{0}, h0:{1}, h:{2}", this.requestNode, h0, h);
 
-            if (h == 1)
+            if (h <= 1)
             {
-                if (!this.AnonGroups.group.ContainsKey(k))
+                NativeGroupResponseEntry e = new NativeGroupResponseEntry(this.Id, h, h0, origId, k, !this.anonGroups.groups.ContainsKey(k));
+                if (!this.anonGroups.groups.ContainsKey(k))
                 {
-                    NativeGroupResponseEntry e = new NativeGroupResponseEntry(this.Id, h, h0, origId, k);
                     SendNativeGroupResponse(pkg.Prev, new List<NativeGroupResponseEntry>() { e });
                     return;
                 }
             }
-            h--;
-            if (h > 0)
+            else
             {
+                //第一次返回-1，表示该节点存在
+                NativeGroupResponseEntry e = new NativeGroupResponseEntry(this.Id, -1, h0, origId, k, !this.anonGroups.groups.ContainsKey(k));
+                SendNativeGroupResponse(pkg.Prev, new List<NativeGroupResponseEntry> { e });
+                h--;
                 SendNativeGroupRequest(h0, h, k, origId);
-                SendNativeGroupResponse(pkg.Prev, new List<NativeGroupResponseEntry> { new NativeGroupResponseEntry(this.Id, -1, h0, origId, k) });
                 Event.AddEvent(new Event(scheduler.currentTime + 0.3f, EventType.CHK_NATGROUP, this, groupident));
             }
 
@@ -589,7 +670,8 @@ namespace LocationPrivacy
         }
         public void RecvNativeGroupResponse(Packet pkg)
         {
-
+            if (pkg.Next != this.Id && pkg.Next != BroadcastNode.Node.Id)
+                return;
             //PrintNativeTempGroup();
 
             if (this.Id != pkg.Dst && pkg.Dst != BroadcastNode.Node.Id)
@@ -617,6 +699,19 @@ namespace LocationPrivacy
                 int origId = e.origId;
                 int k = e.k;
                 int h0 = e.h0;
+                bool avail = e.avail;
+
+
+                //在路由表缓存中可以添加，因为是实时的
+                if (this.routeTable.ContainsKey(nodeId))
+                {
+                    routeTable[nodeId].next = pkg.Prev;
+                    routeTable[nodeId].hops = h;
+                    routeTable[nodeId].localLastUpdatedTime = scheduler.currentTime;
+                    routeTable[nodeId].remoteLastUpdatedTime = scheduler.currentTime;
+                }
+                else
+                    routeTable.Add(nodeId, new RouteEntity(nodeId, pkg.Prev, h, scheduler.currentTime, scheduler.currentTime));
 
                 string groupident = origId + "-" + k + "-" + h0;
 
@@ -693,6 +788,7 @@ namespace LocationPrivacy
 
             //检查节点是否全部返回
             int waitingNodes = 0;
+            int availCount = 0;
             foreach (int nodeId in entrySet.Keys)
             {
                 NativeGroupResponseEntry e = entrySet[nodeId];
@@ -708,6 +804,10 @@ namespace LocationPrivacy
                     return;
                 }
                 e.h++;
+                if (this.cachedCandidateNodes.ContainsKey(k) && this.cachedCandidateNodes[k].Contains(nodeId))
+                    continue;
+                if (e.avail == true)
+                    availCount++;
                 //Console.Write("e: {0}\t", e.nodeId);
             }
 
@@ -716,8 +816,8 @@ namespace LocationPrivacy
                 return;
             if (origId != this.Id)
             {
-                if(!entrySet.ContainsKey(this.Id) && !this.AnonGroups.group.ContainsKey(k))
-                    entrySet.Add(this.Id, new NativeGroupResponseEntry(this.Id, 1, h0, origId, k));
+                if(!entrySet.ContainsKey(this.Id))
+                    entrySet.Add(this.Id, new NativeGroupResponseEntry(this.Id, 1, h0, origId, k, !this.anonGroups.groups.ContainsKey(k)));
                 SendNativeGroupResponse(this.requestNode, entrySet.Values.ToList());
             }
             else//到了初始节点
@@ -725,9 +825,10 @@ namespace LocationPrivacy
                 //现有节点可以建组，无需等待或做其他操作
                 if (this.cachedCandidateNodes.ContainsKey(k))
                 {
-                    if (entrySet.Count - waitingNodes + this.cachedCandidateNodes[k].Count >= k)
+                    //if (entrySet.Count - waitingNodes + this.cachedCandidateNodes[k].Count >= k)
+                    if (availCount +this.cachedCandidateNodes[k].Count >= k-1)//算上自己
                     {
-                        this.AnonGroups.ks.Remove(k);
+                        this.anonGroups.ks.Remove(k);
                         HashSet<int> set = new HashSet<int>();
                         set.Add(this.Id);
                         int i = 1;
@@ -742,13 +843,15 @@ namespace LocationPrivacy
                         {
                             if (i == k)
                                 break;
-                            if (entrySet[nodeId] == null)
+                            if (entrySet[nodeId] == null || entrySet[nodeId].avail == false)
                                 continue;
+                            
                             set.Add(nodeId);
                             i++;
                         }
-                        this.AnonGroups.group.Add(k, set);
+                        this.anonGroups.groups.Add(k, set);
                         PrintGroupNodes(set);
+                        PrivacyReader.rootReader = this;
                         foreach (int nodeId in set)
                             SendSetGroup(this.Id, this.Id, k, nodeId, set, new HashSet<int>() { nodeId });
                     }
@@ -756,7 +859,7 @@ namespace LocationPrivacy
                 else if (waitingNodes > 0) //需要等待子节点
                     return;
                 //之前已经建立成功
-                else if (this.AnonGroups.group.ContainsKey(k))
+                else if (this.anonGroups.groups.ContainsKey(k))
                     return;
                 //不满足要求
                 else if (entrySet.Count < k - 1)
@@ -774,7 +877,7 @@ namespace LocationPrivacy
                 }
                 else //建立成功
                 {
-                    this.AnonGroups.ks.Remove(k);
+                    this.anonGroups.ks.Remove(k);
                     HashSet<int> set = new HashSet<int>();
                     set.Add(this.Id);
                     int i = 1;
@@ -782,11 +885,14 @@ namespace LocationPrivacy
                     {
                         if (i == k)
                             break;
+                        if(entrySet[nodeId].avail == false)
+                            continue;
                         set.Add(nodeId);
                         i++;
                     }
-                    this.AnonGroups.group.Add(k, set);
+                    this.anonGroups.groups.Add(k, set);
                     PrintGroupNodes(set);
+                    PrivacyReader.rootReader = this;
                     foreach (int nodeId in set)
                         SendSetGroup(this.Id, this.Id, k, nodeId, set, new HashSet<int>() { nodeId });
                 }
@@ -805,173 +911,169 @@ namespace LocationPrivacy
             {
                 int c = pair.Key;
                 string key1 = c + "-" + k;
-                if (!this.AnonGroups.subUnavailAnonyNodes.ContainsKey(key1))
+                if (!this.anonGroups.subUnavailAnonyNodes.ContainsKey(key1))
                     continue;
-                totalUnavailAnonyNodeCout += this.AnonGroups.subUnavailAnonyNodes[key1].Count;
+                totalUnavailAnonyNodeCout += this.anonGroups.subUnavailAnonyNodes[key1].Count;
             }
             return totalUnavailAnonyNodeCout;
         }
 
-        public void ProcessAddNewGroupCandidatesRequest(int rootId, int k, int origId, HashSet<int> candidates, double L, double l, double preAngle, int hops, Reader snode)
+        private void AdjustPreviousGroupMembers(int origId, List<int> swapList)
         {
-            Console.WriteLine("debug: READER{0} is finding candidates...", Id);
-            Console.WriteLine("Candidates: {0}", Utility.DumpHashIntSet(candidates));
+            PrivacyReader origNode = (PrivacyReader)global.readers[origId];
+            foreach (int swapNodeId in swapList)
+            {
+                //本来要发请求告诉节点更换匿名组，这里就直接更换了
+                PrivacyReader swapNode = (PrivacyReader)global.readers[swapNodeId];
 
+                //修改所有节点中匿名组的信息
+                for (int i = 0; i < global.readerNum; i++)
+                {
+                    PrivacyReader reader = (PrivacyReader)global.readers[i];
+                    List<int> groupIds = reader.anonGroups.groups.Keys.ToList();
+                    foreach (int k in groupIds)
+                    {
+                        HashSet<int> group = reader.anonGroups.groups[k];
+
+                        //如果两个节点都存在一个组内，或都不在组内，则无需调整
+                        if (group.Contains(swapNodeId) ^ group.Contains(origId) == false)
+                            continue;
+
+                        //如果某个节点的匿名组中存在某个节点，那么存在调整的可能
+                        if (group.Contains(swapNodeId))
+                        {
+                            //否则交换这两个匿名组的节点值
+                            group.Add(origId);
+                            group.Remove(swapNodeId);
+                        }
+                        else//group.Contains(origId)
+                        {
+                            group.Add(swapNodeId);
+                            group.Remove(origId);
+                        }
+                    }
+
+                }
+                //交换两个节点的匿名组信息
+                HashSet<int> l = new HashSet<int>();
+                Utility.AddHashSet(l, origNode.anonGroups.groups.Keys.ToList());
+                Utility.AddHashSet(l, swapNode.anonGroups.groups.Keys.ToList());
+
+                foreach (int k in l)
+                {
+                    //将原来swap节点和orig节点的匿名组交换
+                    if (swapNode.anonGroups.groups.ContainsKey(k) && origNode.anonGroups.groups.ContainsKey(k))
+                    {
+                        HashSet<int> temp = swapNode.anonGroups.groups[k];
+                        swapNode.anonGroups.groups[k] = origNode.anonGroups.groups[k];
+                        origNode.anonGroups.groups[k] = temp;
+                    }
+                    else if (swapNode.anonGroups.groups.ContainsKey(k))
+                    {
+                        origNode.anonGroups.groups.Add(k, swapNode.anonGroups.groups[k]);
+                        swapNode.anonGroups.groups.Remove(k);
+                    }
+                    else if (origNode.anonGroups.groups.ContainsKey(k))
+                    {
+                        swapNode.anonGroups.groups.Add(k, origNode.anonGroups.groups[k]);
+                        origNode.anonGroups.groups.Remove(k);
+                    }
+                }
+
+
+            }
+        }
+
+        public void ProcessNewGroupRequest(int rootId, int k, int origId, double L, double l, double preAngle, int hops, Reader snode)
+        {
             string key = rootId + "";
             AnonyTreeEntry subTreeInfo = this.CachedTreeEntries[key];
             string newgroupident = rootId + "-" + origId + "-" + k;
 
+            Console.WriteLine("READER{0} is process new group request...", Id);
+
             Dictionary<int, SubTreeEntry> subtree = this.CachedTreeEntries[key].subtree;
 
-            if (!this.CachedTreeEntries.ContainsKey(key))
-                return;
+            //原来的思路是寻找包含所有候选节点的父节点
+            //现在通过框添加节点
 
-            //TODO
-            /*
-            //检查距离
-            if (snode != null)
+
+            PrivacyReader.AnonFrames.DumpFrames(this.Id);
+
+            //如果有的节点被交换，则需要调整其原有的你们匿名组，在我们的方案中，只有两类交换
+            //第一类是锚点交换，只在本框内，不会涉及跨组，而第二类在节点不够的条件下，需要跨组交换，这个需要调整
+            //由于只与自由框交换，所以只需要调整origId节点即可
+            //swapList是指示是否需要交换节点的列表
+            List<int> swapList = null;
+            HashSet<int> result = PrivacyReader.AnonFrames.AddNewGroup(origId, this.Id, k, this.anonGroups, subtree, ref swapList);
+
+            //建完组，处理后面的事情
+            if (result != null)
             {
-                PrivacyNeighbor snb = (PrivacyNeighbor)this.Neighbors[snode.Id];
-                //更新位置不应该在这里完成，但是减少计算开销，就放在这里吧
-                UpdateNeighborLocation(snb);
-                double r2 = snb.dist;
-                double r1 = l;
-                double angle = 0;
-                double x = 0;
-                //x为本节点到A0的距离
-                if (r1 == 0)
-                {
-                    x = snb.dist;
-                    angle = snb.angle - Math.PI; //角度相差pi
-                }
-                else
-                {
-                    x = Math.Sqrt(r1 * r1 + r2 * r2 - 2 * r1 * r2 * Math.Cos(preAngle - (3.14 + snb.angle)));
-                    angle = preAngle - Math.Acos((x * x + r1 * r1 - r2 * r2) / (2 * x * r1));
-                }
-            }*/
+                PrintGroupNodes(result);
+                PrivacyReader.AnonFrames.DumpFrames(this.Id);
 
-            HashSet<int> result = new HashSet<int>();
-            Utility.CopyHashSet(result, candidates);
-
-            foreach (int node in candidates)
-            {
-                bool found = false;
-                foreach (int c in subTreeInfo.subtree.Keys)
-                {
-                    if (subTreeInfo.subtree[c].subnodes.Contains(node) || c == node)
-                    {
-                        found = true;
-                        break;
-                    }
-                }
-                if (found == false) //node不在本节点的子树内
-                {
-                    if (subTreeInfo.parent != null)
-                    {
-                        SendAddNewGroupCandidatesRequest(rootId, k, origId, candidates, subTreeInfo.parent.Id, L, l, preAngle, hops); //继续发送
-                        return;
-                    }
-                    else
-                    {
-                        Console.WriteLine("debug candidate reader{0} not found, remove", node);
-                        result.Remove(node);
-                    }
-                }
-            }
-
-
-            //全部节点都在，则建组，并向origId返回组，更新子树的数据
-            //找出可用的节点
-            foreach (string groupident in this.AnonGroups.subUnavailAnonyNodes.Keys)
-            {
-                int k1 = int.Parse(groupident.Split('-')[1]);
-                if (k1 != k)
-                    continue;
-                foreach (int node in candidates)
-                {
-                    if (!this.AnonGroups.subUnavailAnonyNodes[groupident].Contains(node))//已经加入匿名组了，从候选列表中删除
-                        result.Remove(node);
-                }
-            }
-            //result为未加入其他匿名组的节点
-            if (result.Count < k) //暂时不满足要求
-            {
-                int n = k - result.Count;
-
-                int totalUnavailAnonyNodeCout = GetTotalUnavailAnonyNodeCout(subTreeInfo, k);
-                int totalNodeCount = getSubTreeCount(subTreeInfo.subtree) + 1;
-
-                if (totalNodeCount - totalUnavailAnonyNodeCout < k)//肯定不满足要求
-                {
-                    SendAddNewGroupCandidatesRequest(rootId, k, origId, candidates, subTreeInfo.parent.Id, L, l, preAngle, hops);
+                //如果已经在该组内，且匿名组没有变化，则返回
+                if (result.Contains(this.Id) && this.anonGroups.groups.ContainsKey(k)
+                    && Utility.IsSameHashSet(this.anonGroups.groups[k], result))
                     return;
+
+                if (swapList != null && swapList.Count > 0)
+                    AdjustPreviousGroupMembers(origId, swapList);
+
+                //向子节点发送通知
+                //PrintGroupNodes(result);
+                if (result.Contains(this.Id))
+                {
+                    HashSet<int> tmp = new HashSet<int>();
+                    Utility.CopyHashSet(tmp, result);
+                    this.anonGroups.groups.Add(k, tmp);
                 }
 
-                //应该可以成功建组
                 foreach (KeyValuePair<int, SubTreeEntry> pair in subTreeInfo.subtree)
                 {
                     int c = pair.Key;
-                    string key1 = c+"-"+k;
-                    HashSet<int> unavailSet;
-
-                    if (this.AnonGroups.subUnavailAnonyNodes.ContainsKey(key1))
-                        unavailSet = this.AnonGroups.subUnavailAnonyNodes[key1];
-                    else
-                        unavailSet = new HashSet<int>();
-
                     HashSet<int> list = pair.Value.subnodes;
-                    foreach (int nodeId in list)
+
+                    HashSet<int> newsubnode = new HashSet<int>();
+
+                    foreach (int x in result)
                     {
-                        if (unavailSet.Contains(nodeId))
-                            continue;
-                        result.Add(nodeId);
-                        //加入该子树
-                        unavailSet.Add(nodeId);
-                        if (result.Count >= k)//下面有处理
-                            break;
+                        if (c == x || list.Contains(x))
+                            newsubnode.Add(x);
                     }
+                    if (newsubnode.Count > 0)
+                        SendSetGroup(rootId, origId, k, c, result, newsubnode);
                 }
+                //向父亲报告通知
+                if (subTreeInfo.parent != null)
+                    SendSetGroup(rootId, origId, k, subTreeInfo.parent.Id, result, null);
             }
-            else
+            else if (this.Id != rootId) //如果建组失败，则向父节点发送
             {
-                while (result.Count > k)
-                    result.Remove(result.First());
+                SendNewGroupRequest(rootId, k, origId, subTreeInfo.parent.Id, L, l, preAngle, hops); //继续发送
+                return;
             }
-
-            //建完组，处理后面的事情
-            PrintGroupNodes(result);
-            foreach (KeyValuePair<int, SubTreeEntry> pair in subTreeInfo.subtree)
+            else //如果建组失败，且自己就是根节点，则放弃建组
             {
-                int c = pair.Key;
-                HashSet<int> list = pair.Value.subnodes;
-
-                HashSet<int> newsubnode = new HashSet<int>();
-
-                foreach (int x in result)
-                {
-                    if (c == x || list.Contains(x))
-                        newsubnode.Add(x);
-                }
-                if (newsubnode.Count > 0)
-                    SendSetGroup(rootId, origId, k, c, result, newsubnode);
+                //不重试了，直接返回失败
+                Console.WriteLine("{0:F4} [NEW_GROUP_FAIL] {1}{2} {3}", scheduler.currentTime, "READER", this.Id, "new group failed, not enough nodes.");
             }
-            //向父亲报告
-            if(subTreeInfo.parent!=null)
-                SendSetGroup(rootId, origId, k, subTreeInfo.parent.Id, result, null);
         }
 
-        public void SendAddNewGroupCandidatesRequest(int rootId, int k, int origId, HashSet<int> candidates, int dstNode, double L, double l, double preAngle, int hops)
+        public void SendNewGroupRequest(int rootId, int k, int origId, int dstNode, double L, double l, double preAngle, int hops)
         {
             this.retryOnSendingFailture = true;
-            Packet pkg = new Packet(this, Node.getNode(dstNode, NodeType.READER), PacketType.NEW_GROUP_CANDIDATE_REQUEST);
-            pkg.Data = new AddNewGroupCandidateField(rootId, k, origId, candidates, L, l, preAngle, hops);
+            Packet pkg = new Packet(this, Node.getNode(dstNode, NodeType.READER), PacketType.NEW_GROUP_REQUEST);
+            pkg.Data = new NewGroupRequestField(rootId, k, origId, L, l, preAngle, hops);
             SendData(pkg);
             this.retryOnSendingFailture = false;
         }
 
-        public void RecvAddNewGroupCandidatesRequest(Packet pkg)
+        public void RecvNewGroupRequest(Packet pkg)
         {
+            if (pkg.Next != this.Id && pkg.Next != BroadcastNode.Node.Id)
+                return;
             if (this.Id != pkg.Dst)
             {
                 this.retryOnSendingFailture = true;
@@ -980,23 +1082,17 @@ namespace LocationPrivacy
                 return;
             }
 
-            AddNewGroupCandidateField request = (AddNewGroupCandidateField)pkg.Data;
-            ProcessAddNewGroupCandidatesRequest(request.rootId, request.k, request.origId, request.set, request.L, request.l, request.preAngle, request.hops, (Reader)Node.getNode(pkg.Src, NodeType.READER));
-        }
-
-        public void SendAddNewGroupCandidatesResponse(int rootId, int k, int origId, HashSet<int> result, int dstNode, double L, double l, double preAngle, int hops)
-        {
-            Packet pkg = new Packet(this, Node.getNode(dstNode, NodeType.READER), PacketType.NEW_GROUP_CANDIDATE_RESPONSE);
-            pkg.Data = new AddNewGroupCandidateField(rootId, k, origId, result, L, l, preAngle, hops);
-            pkg.TTL = global.longTTL;
-            SendData(pkg);
+            NewGroupRequestField request = (NewGroupRequestField)pkg.Data;
+            ProcessNewGroupRequest(request.rootId, request.k, request.origId, request.L, request.l, request.preAngle, request.hops, (Reader)Node.getNode(pkg.Src, NodeType.READER));
         }
 
 
-        public void RecvAddNewGroupCandidatesResponse(Packet pkg)
+        //建组成功后，其他节点收到响应
+        public void RecvNewGroupResponse(Packet pkg)
         {
-            if (Id == 62)
-                Console.WriteLine("size:{0}", this.AnonGroups.group.Count);
+            if (pkg.Next != this.Id && pkg.Next != BroadcastNode.Node.Id)
+                return;
+
             if (this.Id != pkg.Dst)
             {
                 this.retryOnSendingFailture = true;
@@ -1005,33 +1101,32 @@ namespace LocationPrivacy
                 return;
             }
             //收到上层节点的候选节点
-            AddNewGroupCandidateField request = (AddNewGroupCandidateField)pkg.Data;
+            NewGroupRequestField request = (NewGroupRequestField)pkg.Data;
             int rootId = request.rootId;            
             int k = request.k;
             int origId = request.origId;
-            HashSet<int> candidateResult = request.set;
 
             //该请求是直接发到目的地的，不可能换origId
             if (this.Id != origId)
                 throw new Exception("Wrong origId");
-            ProcessNewGroup(rootId, k, k, origId, this.Id, candidateResult);
+            ProcessNewGroup(rootId, k, k, origId, this.Id);
         }
 
 
         //检查NEW_GROUP请求
-        public void ProcessNewGroup(int rootId, int k, int assigningCount, int origId, int prevNode, HashSet<int> candidates)
+        public void ProcessNewGroup(int rootId, int k, int assigningCount, int origId, int prevNode)
         {
             Console.WriteLine("READER{0} processing...", Id);
             string key = rootId + "" ;
 
-            if (this.AnonGroups.group.ContainsKey(k) && this.AnonGroups.group[k].Count > 0)
+            if (this.anonGroups.groups.ContainsKey(k) && this.anonGroups.groups[k].Count > 0)
                 return;
 
             if (!this.CachedTreeEntries.ContainsKey(key))
                 return;
 
-            if (!this.AnonGroups.ks.Contains(k))
-                this.AnonGroups.ks.Add(k);
+            if (!this.anonGroups.ks.Contains(k))
+                this.anonGroups.ks.Add(k);
 
             AnonyTreeEntry subTreeInfo = this.CachedTreeEntries[key];
             string newgroupident = rootId + "-" + origId + "-" + k;
@@ -1065,7 +1160,7 @@ namespace LocationPrivacy
                             newresult.Add(x);
                         }
                     }
-                    if (this.AnonGroups.group.ContainsKey(k))
+                    if (this.anonGroups.groups.ContainsKey(k))
                         newresult.Add(this.Id);
                     SendNewGroupResponse(rootId, k, origId, newresult, subTreeInfo.parent);
                 }
@@ -1098,6 +1193,7 @@ namespace LocationPrivacy
             }
         }
 
+        /*
         public void SendNewGroupRequest(int rootId, int k, int origId, int assigningCount, HashSet<int> candidates, Node to)
         {
             Packet pkg = new Packet(this, to, PacketType.NEW_GROUP_REQUEST);
@@ -1107,7 +1203,7 @@ namespace LocationPrivacy
             SendData(pkg);
             this.retryOnSendingFailture = false;
         }
-
+        
         public void RecvNewGroupRequest(Packet pkg)
         {
             if (this.Id != pkg.Dst)
@@ -1125,21 +1221,24 @@ namespace LocationPrivacy
             HashSet<int> candidates = newGroupRequest.candidates;
 
 
-            ProcessNewGroup(rootId, k, assignedCount, origId, pkg.Src, candidates);
-        }
+            ProcessNewGroup(rootId, k, assignedCount, origId, pkg.Src);
+        }*/
 
         public void SendNewGroupPing(int rootId, int k, int origId, int dst)
         {
             this.retryOnSendingFailture = true;
             Packet pkg = new Packet(this, Node.getNode(dst, NodeType.READER), PacketType.NEW_GROUP_PING);
             pkg.TTL = global.longTTL;
-            pkg.Data = new NewGroupRequestField(rootId, k, origId, -1, null);
+            //pkg.Data = new NewGroupRequestField(rootId, k, origId, -1, null);
+            pkg.Data = new NewGroupRequestField(rootId, k, origId, 0, 0, 0, 0);
             SendData(pkg);
             this.retryOnSendingFailture = false;
         }
 
         public void RecvNewGroupPing(Packet pkg)
         {
+            if (pkg.Next != this.Id && pkg.Next!= BroadcastNode.Node.Id)
+                return;
             if (this.Id != pkg.Dst)
             {
                 this.retryOnSendingFailture = true;
@@ -1219,6 +1318,8 @@ namespace LocationPrivacy
         public void RecvTreeGroupRequest(Packet pkg)
         {
 
+            if (pkg.Next != this.Id && pkg.Next!= BroadcastNode.Node.Id)
+                return;
             if (pkg.Prev == Id && pkg.PrevType == type)
                 return;
 
@@ -1367,7 +1468,7 @@ namespace LocationPrivacy
 
         public void PrintGroupNodes(int k)
         {
-            Console.WriteLine("{0:F4} [NEW_GROUP] {1}{2} group:({3})", scheduler.currentTime, this.type, this.Id, Utility.DumpHashIntSet(this.AnonGroups.group[k]));
+            Console.WriteLine("{0:F4} [NEW_GROUP] {1}{2} group:({3})", scheduler.currentTime, this.type, this.Id, Utility.DumpHashIntSet(this.anonGroups.groups[k]));
         }
 
         public void PrintGroupNodes(HashSet<int> group)
@@ -1448,6 +1549,8 @@ namespace LocationPrivacy
         //收到子树的响应
         public void RecvSubTreeInfo(Packet pkg)
         {
+            if (pkg.Next != this.Id && pkg.Next!= BroadcastNode.Node.Id)
+                return;
             if (pkg.Prev == Id && pkg.PrevType == type)
                 return;
 
@@ -1586,7 +1689,7 @@ namespace LocationPrivacy
                 //检查
                 List<int> temp = new List<int>();
                 //找到所有达到要求的匿名组
-                foreach (int k in this.AnonGroups.ks)
+                foreach (int k in this.anonGroups.ks)
                 {
                     int totalUnavailAnonyNodeCout = GetTotalUnavailAnonyNodeCout(subTreeInfo, k);
                     int totalNodeCount = getSubTreeCount(subTreeInfo.subtree) + 1;
@@ -1640,19 +1743,22 @@ namespace LocationPrivacy
                 {
                     string newgroupident = rootId + "-" + rootId + "-" + k;
 
-                    this.AnonGroups.ks.Remove(k);
-                    if (!this.AnonGroups.group.ContainsKey(k))
-                        this.AnonGroups.group.Add(k, new HashSet<int>());
+                    this.anonGroups.ks.Remove(k);
+                    if (!this.anonGroups.groups.ContainsKey(k))
+                        this.anonGroups.groups.Add(k, new HashSet<int>());
 
-                    HashSet<int> group = this.AnonGroups.group[k];
+                    HashSet<int> group = this.anonGroups.groups[k];
                     Dictionary<int, HashSet<int>> tempgroup = new Dictionary<int, HashSet<int>>();
+
+                    if (!this.anonGroups.groups[k].Contains(this.Id))
+                        this.anonGroups.groups[k].Add(this.Id);
 
                     foreach (KeyValuePair<int, SubTreeEntry> pair in subTreeInfo.subtree)
                     {
                         int c = pair.Key;
                         HashSet<int> l = pair.Value.subnodes;
 
-                        this.AnonGroups.group[k].Add(c);
+                        this.anonGroups.groups[k].Add(c);
 
                         tempgroup.Add(c, new HashSet<int>());
                         tempgroup[c].Add(c);
@@ -1668,7 +1774,7 @@ namespace LocationPrivacy
                         {
                             if (i == end)
                                 break;
-                            this.AnonGroups.group[k].Add(x);
+                            this.anonGroups.groups[k].Add(x);
                             tempgroup[c].Add(x);
                             i++;
                         }
@@ -1677,25 +1783,29 @@ namespace LocationPrivacy
                             break;
                     }
 
+
                     foreach (KeyValuePair<int, HashSet<int>> pair in tempgroup)
                     {
                         int c = pair.Key;
                         string ckey = c + "-" + k;
                         HashSet<int> subnodes = pair.Value;
-                        if (!this.AnonGroups.subUnavailAnonyNodes.ContainsKey(ckey))
-                            this.AnonGroups.subUnavailAnonyNodes.Add(ckey, new HashSet<int>());
+                        if (!this.anonGroups.subUnavailAnonyNodes.ContainsKey(ckey))
+                            this.anonGroups.subUnavailAnonyNodes.Add(ckey, new HashSet<int>());
 
-                        Utility.AddHashSet(this.AnonGroups.subUnavailAnonyNodes[ckey], subnodes);
-                        SendSetGroup(rootId, rootId, k, c, this.AnonGroups.group[k], subnodes);//这里rootId和origId应该是一样的
+                        Utility.AddHashSet(this.anonGroups.subUnavailAnonyNodes[ckey], subnodes);
+                        SendSetGroup(rootId, rootId, k, c, this.anonGroups.groups[k], subnodes);//这里rootId和origId应该是一样的
 
                         //TODO subUnavailAnonyNodeCounts在节点消失的时候应该减少的
                     }
-                    if (!this.AnonGroups.group[k].Contains(this.Id))
-                        this.AnonGroups.group[k].Add(this.Id);
 
                     PrintGroupNodes(k);
                     DumpTreeNodes(key, k);
+                    PrivacyReader.rootReader = this;
 
+                    //为建立新组作准备，将所有节点放到一个框内
+                    if (PrivacyReader.AnonFrames.GetFrameCount() == 0)
+                        PrivacyReader.AnonFrames.Init(this.anonGroups.groups[k], this.Id, false);
+                    PrivacyReader.AnonFrames.DumpFrames(this.Id);
                 }
             }
             Console.WriteLine("newstatus:{0}, current cn:{1}", newstatus, subTreeInfo.cn);
@@ -1713,6 +1823,8 @@ namespace LocationPrivacy
 
         void RecvSetGroup(Packet pkg)
         {
+            if (pkg.Next != this.Id && pkg.Next!= BroadcastNode.Node.Id)
+                return;
             if (this.Id != pkg.Dst)
             {
                 this.retryOnSendingFailture = true;
@@ -1726,6 +1838,13 @@ namespace LocationPrivacy
             int k = pkg.SetGroup.k;
             HashSet<int> group = pkg.SetGroup.group;
             HashSet<int> subnode = pkg.SetGroup.subnodes;
+
+            if (global.method == 1 || global.method == 2)//native
+            {
+                this.anonGroups.groups.Add(k, group);
+                Console.WriteLine("Reader{0} is set to {1}-group", this.Id , k);
+                return;
+            }
 
             string key = rootId + "";
 
@@ -1741,51 +1860,52 @@ namespace LocationPrivacy
                     HashSet<int> tmp = new HashSet<int>();
                     string newgroupident = rootId + "-" + origId + "-" + k;
                     Utility.CopyHashSet(tmp, group);
-                    string key1 = pkg.Src+"-"+k;
-                    if(!this.AnonGroups.subUnavailAnonyNodes.ContainsKey(key1))
-                        this.AnonGroups.subUnavailAnonyNodes.Add(key1, new HashSet<int>());
-                    Utility.AddHashSet(this.AnonGroups.subUnavailAnonyNodes[key1], group);
+                    string key1 = pkg.Src + "-" + k;
+                    if (!this.anonGroups.subUnavailAnonyNodes.ContainsKey(key1))
+                        this.anonGroups.subUnavailAnonyNodes.Add(key1, new HashSet<int>());
+                    Utility.AddHashSet(this.anonGroups.subUnavailAnonyNodes[key1], group);
                     if (subTreeInfo.parent != null)
                         SendSetGroup(rootId, origId, k, subTreeInfo.parent.Id, group, null);
-                    return;
                 }
                 else
                 {
                     Console.WriteLine("debug: reader{0} is not my subnode.", pkg.Src);
-                    return;
                 }
+                return;
             }
-
-            if (this.AnonGroups.ks.Contains(k))
-                this.AnonGroups.ks.Remove(k);
-
-
-            if (subnode.Contains(this.Id) && !this.AnonGroups.group.ContainsKey(k))
+            else
             {
-                this.AnonGroups.group.Add(k, new HashSet<int>());
-                Utility.CopyHashSet(this.AnonGroups.group[k], group);
-                Console.WriteLine("Reader{0} is set to {1}-group", Id, k);
-            }
 
-            foreach (KeyValuePair<int, SubTreeEntry> pair in subTreeInfo.subtree)
-            {
-                int c = pair.Key;
-                HashSet<int> list = pair.Value.subnodes;
+                if (this.anonGroups.ks.Contains(k))
+                    this.anonGroups.ks.Remove(k);
 
-                HashSet<int> newsubnode = new HashSet<int>();
-
-                foreach (int x in subnode)
+                if (subnode.Contains(this.Id) && !this.anonGroups.groups.ContainsKey(k))
                 {
-                    if (c == x || list.Contains(x))
-                        newsubnode.Add(x);
+                    this.anonGroups.groups.Add(k, new HashSet<int>());
+                    Utility.CopyHashSet(this.anonGroups.groups[k], group);
+                    Console.WriteLine("Reader{0} is set to {1}-group", Id, k);
                 }
-                if (newsubnode.Count > 0)
-                    SendSetGroup(rootId, origId, k, c, group, newsubnode);
+
+                foreach (KeyValuePair<int, SubTreeEntry> pair in subTreeInfo.subtree)
+                {
+                    int c = pair.Key;
+                    HashSet<int> list = pair.Value.subnodes;
+
+                    HashSet<int> newsubnode = new HashSet<int>();
+
+                    foreach (int x in subnode)
+                    {
+                        if (c == x || list.Contains(x))
+                            newsubnode.Add(x);
+                    }
+                    if (newsubnode.Count > 0)
+                        SendSetGroup(rootId, origId, k, c, group, newsubnode);
 
 
-                string ckey = c + "-" + k;
-                if (this.AnonGroups.subUnavailAnonyNodes.ContainsKey(ckey))
-                    Utility.AddHashSet(this.AnonGroups.subUnavailAnonyNodes[ckey], subnode);
+                    string ckey = c + "-" + k;
+                    if (this.anonGroups.subUnavailAnonyNodes.ContainsKey(ckey))
+                        Utility.AddHashSet(this.anonGroups.subUnavailAnonyNodes[ckey], subnode);
+                }
             }
         }
 
@@ -1810,6 +1930,88 @@ namespace LocationPrivacy
                     maxnb = nb;
             }
             return maxnb;
+        }
+
+        //计算多个匿名组的交集
+        public HashSet<int> GetGroupInsection()
+        {
+            HashSet<int> insection = null;
+            //这里我们直接计算某个树节点所在组的交集，其实应该是存放于每个父节点上的
+            PrivacyGlobal global = (PrivacyGlobal)Global.getInstance();
+
+            
+            foreach (KeyValuePair<int, HashSet<int>> pair in this.anonGroups.groups)
+            {
+                HashSet<int> group = pair.Value;
+                if (insection == null)
+                {
+                    insection = new HashSet<int>();
+                    foreach (int x in group)
+                        insection.Add(x);
+                }
+                else
+                {
+                    HashSet<int> temp = new HashSet<int>();
+                    foreach (int x in insection)
+                    {
+                        if (!group.Contains(x))
+                            temp.Add(x);
+                    }
+                    foreach (int x in temp)
+                    {
+                        insection.Remove(x);
+                    }
+                }
+            }
+            return insection;
+        }
+
+
+        //计算最小匿名组，就是组成员最少
+        public HashSet<int> GetMinGroup()
+        {
+            HashSet<int> ming = null;         
+            PrivacyGlobal global = (PrivacyGlobal)Global.getInstance();
+
+            foreach (KeyValuePair<int, HashSet<int>> pair in this.anonGroups.groups)
+            {
+                HashSet<int> group = pair.Value;
+                if (ming == null)
+                {
+                    ming = group;
+                }
+                else
+                {
+                    if (group.Count < ming.Count)
+                        ming = group;
+                }
+            }
+            return ming;
+        }
+
+        public static void CalculateGroups()
+        {
+            PrivacyGlobal global = (PrivacyGlobal)Global.getInstance();
+            Scheduler scheduler = Scheduler.getInstance();
+            for (int i = 0; i < global.readerNum; i++)
+            {
+                PrivacyReader reader = (PrivacyReader)global.readers[i];
+                if (reader.anonGroups.groups.Count == 0)
+                    continue;
+                HashSet<int> insection = reader.GetGroupInsection();
+                Console.WriteLine("{0:F4} [READER_GROUP_STAT] {1}{2}", scheduler.currentTime, "READER", reader.Id);
+                foreach (KeyValuePair<int, HashSet<int>> pair1 in reader.anonGroups.groups)
+                {
+                    int k = pair1.Key;
+                    HashSet<int> group = pair1.Value;
+                    Console.WriteLine("{0:F4} [READER_GROUP] {1}{2} k={3} group:({4})", scheduler.currentTime, "READER", reader.Id, k, Utility.DumpHashIntSet(group));
+                }
+                HashSet<int> ming = reader.GetMinGroup();
+                Console.WriteLine("{0:F4} [READER_INS_GROUP] {1}{2}  group:({3})", scheduler.currentTime, "READER", reader.Id, Utility.DumpHashIntSet(insection));
+                Console.WriteLine("{0:F4} [READER_MIN_GROUP] {1}{2}  group:({3})", scheduler.currentTime, "READER", reader.Id, Utility.DumpHashIntSet(ming));
+                
+            }
+            return;
         }
 
 
@@ -1972,79 +2174,6 @@ namespace LocationPrivacy
 
         public override void CheckNeighbors()
         {
-            /*
-            //temp存放的是很久没有联系的邻居
-            List<int> temp = new List<int>();
-            foreach (int n in this.Neighbors.Keys.ToList())
-            {
-                if (scheduler.CurrentTime - this.Neighbors[n].lastBeacon > global.checkNeighborInterval)
-                {
-                    this.Neighbors.Remove(n);
-                    this.routeTable.Remove(n);
-                    continue;
-                }
-                foreach (KeyValuePair<string, AnonyTreeEntry> pair in this.CachedTreeEntries)
-                {
-                    AnonyTreeEntry subTreeInfo = pair.Value;
-                    if ((subTreeInfo.subtree.ContainsKey(n) && scheduler.CurrentTime - subTreeInfo.subtree[n].lastconfirm > 5)
-                        || (subTreeInfo.parent!=null && subTreeInfo.parent.Id == n && scheduler.CurrentTime - subTreeInfo.parentconfirmed > 5))
-                    {
-                        this.Neighbors.Remove(n);
-                        this.routeTable.Remove(n);
-                        continue;
-                    }
-                }
-            }
-
-            foreach (KeyValuePair<string, AnonyTreeEntry> pair in this.CachedTreeEntries)
-            {
-                AnonyTreeEntry subTreeInfo = pair.Value;
-                Node parent = subTreeInfo.parent;
-                bool update = false;
-
-                temp = new List<int>();
-                foreach (KeyValuePair<int, SubTreeEntry> pair1 in subTreeInfo.subtree)
-                {
-                    int nodeId = pair1.Key;
-                    SubTreeEntry e = pair1.Value;
-                    if (scheduler.CurrentTime - e.lastconfirm > 10) //很久没有联系了，删除
-                    {
-                        update = true;
-                        Console.WriteLine("READER{0} loses READER{1}", this.id, nodeId);
-                        subTreeInfo.cn -= subTreeInfo.subtree[nodeId].subcn;
-                        subTreeInfo.subtree.Remove(nodeId);
-                    }
-                    else if(scheduler.CurrentTime - e.lastconfirm > 5) //有点久了，ping一下
-                    {
-                        Console.WriteLine("READER{0} pings READER{1}", this.id, nodeId);
-                        SendPing(nodeId, e.hops+1);
-                    }
-                }
-
-                if (this.id == subTreeInfo.rootId)
-                    continue;
-
-                if (scheduler.CurrentTime - subTreeInfo.parentconfirmed > 10)//丢失父亲节点
-                {
-                    update = true;
-                    Console.WriteLine("READER{0} loses READER{1}", this.id, parent.Id);
-                    parent = BroadcastNode.Node;
-                }
-                else if (scheduler.CurrentTime - subTreeInfo.parentconfirmed > 5) //有点久了，ping一下
-                {
-                    Console.WriteLine("READER{0} pings READER{1}", this.id, parent.Id);
-                    SendPing(subTreeInfo.parent.Id, subTreeInfo.parenthops+1);
-                }
-
-                if (update == true)
-                {
-                    List<int> list = getSubTreeNode(subTreeInfo.rootId);
-                    SendSubTreeInfo(subTreeInfo.rootId, list, SubNodeStatus.NORMAL, subTreeInfo.cn, parent);
-                }
-
-                //Console.WriteLine("Node " + id + " remove neighbor " + t);
-
-            }*/
             List<int> temp = new List<int>();
             foreach (Neighbor nb in Neighbors.Values)
             {
@@ -2132,6 +2261,22 @@ namespace LocationPrivacy
                 return;
             }
 
+            if (pkg.Next == this.Id ||pkg.Next == BroadcastNode.Node.Id)
+            {
+                if (pkg.Type == PacketType.BEACON
+                    || pkg.Type == PacketType.INIT_TREE_REQUEST
+                    || pkg.Type == PacketType.SUBTREE_INFO
+                    || pkg.Type == PacketType.SET_GROUP
+                    || pkg.Type == PacketType.NEW_GROUP_PING
+                    || pkg.Type == PacketType.NEW_GROUP_REQUEST
+                    || pkg.Type == PacketType.NEW_GROUP_RESPONSE
+                    || pkg.Type == PacketType.NATIVE_GROUP_REQUEST
+                    || pkg.Type == PacketType.NATIVE_GROUP_RESPONSE
+                    || pkg.Type == PacketType.NATIVE_LONG_GROUP_REQUEST
+                    || pkg.Type == PacketType.NATIVE_LONG_GROUP_RESPONSE)
+                    Console.WriteLine("{0:F4} [{1}] {2}{3} recv from {4}{5}({6}->{7}->{8})", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.PrevType, pkg.Prev, pkg.Src, pkg.Prev, pkg.Dst);
+            }
+
             //如果不存在邻居中，则添加.
             //如果存在，则更新时间
             //if (pkg.Beacon == null && !this.Neighbors.ContainsKey(pkg.Prev) && pkg.PrevType == NodeType.READER)
@@ -2150,25 +2295,17 @@ namespace LocationPrivacy
                 case PacketType.SUBTREE_INFO:
                     RecvSubTreeInfo(pkg);
                     break;
-                case PacketType.NEW_GROUP_REQUEST:
-                    RecvNewGroupRequest(pkg);
-                    break;
-                    /*
-                case PacketType.NEW_GROUP_RESPONSE:
-                    RecvNewGroupResponse(pkg);
-                    break;
-                     * */
                 case PacketType.SET_GROUP:
                     RecvSetGroup(pkg);
                     break;
                 case PacketType.NEW_GROUP_PING:
                     RecvNewGroupPing(pkg);
                     break;
-                case PacketType.NEW_GROUP_CANDIDATE_REQUEST:
-                    RecvAddNewGroupCandidatesRequest(pkg);
+                case PacketType.NEW_GROUP_REQUEST:
+                    RecvNewGroupRequest(pkg);
                     break;
-                case PacketType.NEW_GROUP_CANDIDATE_RESPONSE:
-                    RecvAddNewGroupCandidatesResponse(pkg);
+                case PacketType.NEW_GROUP_RESPONSE:
+                    RecvNewGroupResponse(pkg);
                     break;
                 case PacketType.NATIVE_GROUP_REQUEST:
                     RecvNativeGroupRequest(pkg);
@@ -2181,7 +2318,13 @@ namespace LocationPrivacy
                     break;
                 case PacketType.NATIVE_LONG_GROUP_RESPONSE:
                     RecvSetLongNativeGroupResponse(pkg);
-                    break;    
+                    break;
+
+                /*
+            case PacketType.NEW_GROUP_REQUEST:
+                RecvNewGroupRequest(pkg);
+                break;
+                 * */
                 //Some codes are hided in the base class.
                 default:
                     base.ProcessPacket(pkg);

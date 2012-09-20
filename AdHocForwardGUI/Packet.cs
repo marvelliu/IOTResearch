@@ -45,11 +45,9 @@ namespace AdHocBaseApp
         INIT_REGION_REQUEST,
         SUBTREE_INFO,
         SET_GROUP,
-        NEW_GROUP_CANDIDATE_REQUEST,
-        NEW_GROUP_CANDIDATE_RESPONSE,
         NEW_GROUP_REQUEST,
-        NEW_GROUP_PING,
         NEW_GROUP_RESPONSE,
+        NEW_GROUP_PING,
         NATIVE_GROUP_REQUEST,
         NATIVE_GROUP_RESPONSE,
         NATIVE_LONG_GROUP_REQUEST,
@@ -97,19 +95,6 @@ namespace AdHocBaseApp
         public GatewayEntity[] gatewayEntities;
     }
 
-    [Serializable]
-    public class AODVRequestField
-    {
-        public int src;
-        public int dst;
-        public int hops;
-        public AODVRequestField(int src, int dst, int hops)
-        {
-            this.src = src;
-            this.dst = dst;
-            this.hops = hops;
-        }
-    }
 
     [Serializable]
     public class SWRequestField
@@ -534,24 +519,22 @@ namespace AdHocBaseApp
     
     
     [Serializable]
-    public class AddNewGroupCandidateField
+    public class NewGroupRequestField
     {
         public int rootId;
         public int k;
         public int origId;
-        public HashSet<int> set;
 
         public double L;
         public double l;
         public double preAngle;
         public int hops;
 
-        public AddNewGroupCandidateField(int rootId, int k, int origId, HashSet<int> set, double L, double l, double preAngle, int hops)
+        public NewGroupRequestField(int rootId, int k, int origId, double L, double l, double preAngle, int hops)
         {
             this.rootId = rootId;
             this.k = k;
             this.origId = origId;
-            this.set = set;
             this.L = L;
             this.l = l;
             this.preAngle = preAngle;
@@ -559,6 +542,7 @@ namespace AdHocBaseApp
         }
     }
 
+    /*
     [Serializable]
     public class NewGroupRequestField
     {
@@ -576,7 +560,7 @@ namespace AdHocBaseApp
             this.assigningCount = assignedCount;
             this.candidates = candidates;
         }
-    }
+    }*/
 
     [Serializable]
     public class NewGroupResponseField
@@ -608,6 +592,19 @@ namespace AdHocBaseApp
             this.k = k;
             this.h = h;
             this.h0 = h0;
+        }
+    }
+
+
+    [Serializable]
+    public class SetLongNativeGroupRequestField
+    {
+        public int k;
+        public int hop;
+        public SetLongNativeGroupRequestField(int k, int hop)
+        {
+            this.k = k;
+            this.hop = hop;
         }
     }
     
@@ -679,8 +676,9 @@ namespace AdHocBaseApp
 
         public bool inited = false;
 
+        public bool forceDiscovery = false;
+
         public BeaconField Beacon;
-        public AODVRequestField AODVRequest;
         public SWRequestField SWRequest;
         public CBRequestField CBRequest;
         public LandmarkNotificationField LandmarkNotification;

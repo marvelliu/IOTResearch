@@ -192,6 +192,14 @@ namespace AdHocBaseApp
                 to.Add(f);
         }
 
+        public static void AddHashSet<T>(HashSet<T> to, List<T> from)
+        {
+            foreach (T o in from)
+            {
+                if (!to.Contains(o))
+                    to.Add(o);
+            }
+        }
 
         public static void AddHashSet<T>(HashSet<T> to, HashSet<T> from)
         {
@@ -204,6 +212,18 @@ namespace AdHocBaseApp
             to.Clear();
             foreach (T o in from)
                 to.Add(o);
+        }
+
+        public static bool IsSameHashSet<T>(HashSet<T> s1, HashSet<T> s2)
+        {
+            if (s1.Count != s2.Count)
+                return false;
+            foreach (T o in s1)
+            {
+                if (!s2.Contains(o))
+                    return false;
+            }
+            return true;
         }
 
         /*

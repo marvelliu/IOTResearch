@@ -128,6 +128,7 @@ namespace HeterogeneousForward
         public HashSet<string> receivedSWPackets;
         new public Dictionary<string, RouteEntity> routeTable;
         new public Dictionary<string, Dictionary<int, PendingAODVRequestCacheEntry>> pendingAODVRequests;
+        new public Dictionary<string, double> pendingAODVRequestTimes;
         new public Dictionary<string, List<PacketCacheEntry>> pendingAODVData;
         public Dictionary<int, RouteEntity> cliqueMembers;
 
@@ -218,12 +219,12 @@ namespace HeterogeneousForward
             return null;
         }
 
-        public void SendAODVRequest(Node node, int src, int dst, int hops, uint tags)
+        public void SendAODVRequest(Node node, int src, int dst, int hops, double srcCachedTime, uint tags, bool forceDiscovery)
         {
             Packet pkg = new Packet(this, node, PacketType.AODV_REQUEST);
-            pkg.AODVRequest = new AODVRequestField(src, dst, hops);
+            pkg.Data = new AODVRequest(src, dst, hops, srcCachedTime);
+            pkg.forceDiscovery = forceDiscovery;
             pkg.TTL = 1;
-            pkg.Data = dst;
             pkg.Tags = tags;
             SendPacketDirectly(scheduler.currentTime, pkg);
         }
@@ -243,9 +244,12 @@ namespace HeterogeneousForward
                 return;
             }
 
-            int src = pkg.AODVRequest.src;
-            int dst = pkg.AODVRequest.dst;
-            int hops = pkg.AODVRequest.hops;
+            AODVRequest request = (AODVRequest)pkg.Data;
+            int src = request.src;
+            int dst = request.dst;
+            int hops = request.hops;
+            double srcCachedTime = request.srcCachedTime;
+
             uint tags = pkg.Tags;
 
             //目的节点不受tag的限制
@@ -265,7 +269,7 @@ namespace HeterogeneousForward
             string key = dst + "-" + tags;
             if (pendingAODVRequests.ContainsKey(key)
                 && pendingAODVRequests[key].ContainsKey(src)
-                && scheduler.currentTime - pendingAODVRequests[key][src].firstTime < 1.5)
+                && scheduler.currentTime - pendingAODVRequestTimes[key] < 1.5f)
             {
                 return;
             }
@@ -280,20 +284,31 @@ namespace HeterogeneousForward
             }
 
             //在快速运动的环境下需要加入超时机制
-            RouteEntity entity = GetRouteEntityFromRouteTable(dst, (int)tags, new HashSet<int>(){src, pkg.Prev});
-            if (entity!= null)
+            if (pkg.forceDiscovery == false)
             {
-                if (entity.next != prevNode.Id)//避免陷入死循环
+                RouteEntity entity = GetRouteEntityFromRouteTable(dst, (int)tags, new HashSet<int>() { src, pkg.Prev });
+                if (entity != null)
                 {
-                    SendAODVReply(dst, prevNode, entity.hops, entity.remoteLastUpdatedTime, tags);
-                    return;
+                    //如果自己路由表的项也很老，则继续转发
+                    if (entity.remoteLastUpdatedTime - srcCachedTime < 1f)
+                    {
+                        SendAODVRequest(BroadcastNode.Node, src, dst, hops - 1, srcCachedTime, tags, false);
+                        AddPendingAODVRequest(src, prevNode.Id, dst, true, tags);
+                        return;
+                    }
+                    else if (entity.next != prevNode.Id)//避免陷入死循环
+                    {
+                        SendAODVReply(dst, prevNode, entity.hops, entity.remoteLastUpdatedTime, tags);
+                        return;
+                    }
                 }
             }
+
             //Not found...
             if (hops > 0)
             {
                 //Console.WriteLine("hops:{0}", hops);
-                SendAODVRequest(BroadcastNode.Node, src, dst, hops - 1, tags);
+                SendAODVRequest(BroadcastNode.Node, src, dst, hops - 1, srcCachedTime, tags, false);
                 AddPendingAODVRequest(src, prevNode.Id, dst, true, tags);
             }
         }
@@ -355,6 +370,7 @@ namespace HeterogeneousForward
                     prevs.Clear();
                 }
                 pendingAODVRequests.Remove(key);
+                pendingAODVRequestTimes.Remove(key);
             }
             //Send pending datas...
             if (pendingAODVData.ContainsKey(key))
@@ -381,24 +397,27 @@ namespace HeterogeneousForward
             Reader node = global.readers[pkg.Prev];
             //Check Route Table
 
-            RouteEntity entity = GetRouteEntityFromRouteTable(dst, (int)pkg.Tags, new HashSet<int>(){pkg.Prev, pkg.Src});
-            if (entity != null)
+            if (pkg.forceDiscovery == false)
             {
-                //Console.WriteLine("{0}-{1}", entity.hops, entity.time);
-                pkg.Prev = Id;
-                pkg.Next = entity.next;
-                pkg.PrevType = pkg.NextType = NodeType.READER;
-                pkg.TTL = Math.Max(entity.hops + 1, pkg.TTL);
-                this.retryOnSendingFailture = true;
-                if (!SendPacketDirectly(scheduler.currentTime, pkg))
-                    RemoveRouteEntityFromRouteTableWithNeighbor(entity.next);
-                this.retryOnSendingFailture = false;
-                return;
+                RouteEntity entity = GetRouteEntityFromRouteTable(dst, (int)pkg.Tags, new HashSet<int>() { pkg.Prev, pkg.Src });
+                if (entity != null)
+                {
+                    //Console.WriteLine("{0}-{1}", entity.hops, entity.time);
+                    pkg.Prev = Id;
+                    pkg.Next = entity.next;
+                    pkg.PrevType = pkg.NextType = NodeType.READER;
+                    pkg.TTL = Math.Max(entity.hops + 1, pkg.TTL);
+                    this.retryOnSendingFailture = true;
+                    if (!SendPacketDirectly(scheduler.currentTime, pkg))
+                        RemoveRouteEntityFromRouteTableWithNeighbor(entity.next);
+                    this.retryOnSendingFailture = false;
+                    return;
+                }
             }
             //Not found...
 
             Console.WriteLine("{0:F4} [{1}] {2}{3} tries to send {4}{5} but no route", scheduler.currentTime, pkg.Type, this.type, this.Id, pkg.DstType, pkg.Dst);
-            SendAODVRequest(BroadcastNode.Node, this.Id, dst, pkg.TTL - 1, pkg.Tags);
+            SendAODVRequest(BroadcastNode.Node, this.Id, dst, pkg.TTL - 1, pkg.Tags, pkg.forceDiscovery);
             AddPendingAODVData(pkg);
         }
 
@@ -413,7 +432,7 @@ namespace HeterogeneousForward
             if (!this.pendingAODVRequests[key].ContainsKey(src))
                 this.pendingAODVRequests[key].Add(src, new PendingAODVRequestCacheEntry());
             else if (updateFirstTime == true)
-                this.pendingAODVRequests[key][src].firstTime = scheduler.currentTime;
+                this.pendingAODVRequestTimes[key] = scheduler.currentTime;
 
             if (!this.pendingAODVRequests[key][src].prevs.Contains(prev))
                 this.pendingAODVRequests[key][src].prevs.Add(prev);
@@ -457,7 +476,7 @@ namespace HeterogeneousForward
             int dst = pkg.Dst;
             if (pkg.SrcSenderSeq < 0)//未定该数据包的id
             {
-                initPacketSeq(pkg);
+                InitPacketSeq(pkg);
 
                 string pkgId = pkg.getId();
                 if (global.debug)
@@ -542,7 +561,7 @@ namespace HeterogeneousForward
             RouteEntity routeEntity = null;
 
             if (pkg.seqInited == false && this.Id == pkg.Src)//未定该数据包的id
-                initPacketSeq(pkg);
+                InitPacketSeq(pkg);
              Reader node = global.readers[pkg.Prev];
             if (pkg.Type != PacketType.DATA && pkg.Type != PacketType.SW_DATA)
                 throw new Exception("not DATA or type!");
@@ -682,7 +701,7 @@ namespace HeterogeneousForward
                 //这里如果为了增加成功率，可以设ttl为global.ttl，而非团内的半径
                 pkg.TTL = global.innerSWTTL;
                 //pkg.TTL = global.TTL;
-                SendAODVRequest(BroadcastNode.Node, this.Id, dst, pkg.TTL - 1, pkg.Tags);
+                SendAODVRequest(BroadcastNode.Node, this.Id, dst, pkg.TTL - 1, pkg.Tags, pkg.forceDiscovery);
                 AddPendingAODVData(pkg);
             }
             else if (pkg.Type == PacketType.SW_DATA && found)
@@ -691,7 +710,7 @@ namespace HeterogeneousForward
                 //这里如果为了增加成功率，可以设ttl为global.ttl，而非团内的半径
                 pkg.TTL = global.outerSWTTL;
                 //pkg.TTL = global.TTL;
-                SendAODVRequest(BroadcastNode.Node, this.Id, dst, pkg.TTL - 1, pkg.Tags);
+                SendAODVRequest(BroadcastNode.Node, this.Id, dst, pkg.TTL - 1, pkg.Tags, pkg.forceDiscovery);
                 AddPendingAODVData(pkg);
             }
             else if (!foundSwHub && this.isSwHub) //不在簇内，hub实在没有找到转发的hub
@@ -700,7 +719,7 @@ namespace HeterogeneousForward
 
                 pkg.TTL = 10;
                 //pkg.TTL = global.TTL;
-                SendAODVRequest(BroadcastNode.Node, this.Id, dst, pkg.TTL - 1, pkg.Tags);
+                SendAODVRequest(BroadcastNode.Node, this.Id, dst, pkg.TTL - 1, pkg.Tags, pkg.forceDiscovery);
                 AddPendingAODVData(pkg);
             }
         }
@@ -1962,7 +1981,7 @@ namespace HeterogeneousForward
 
 
             if (pkg.Type == PacketType.AODV_REQUEST)
-                Console.WriteLine("{0:F4} [{1}] {2}{3} sends to {4}{5}({6}->{7}->{8})", time, pkg.Type, this.type, this.Id, pkg.NextType, (pkg.Next == -1 ? "all" : pkg.Next.ToString()), pkg.Src, pkg.Dst, pkg.AODVRequest.dst);
+                Console.WriteLine("{0:F4} [{1}] {2}{3} sends to {4}{5}({6}->{7}->{8})", time, pkg.Type, this.type, this.Id, pkg.NextType, (pkg.Next == -1 ? "all" : pkg.Next.ToString()), pkg.Src, pkg.Dst, ((AODVRequest)pkg.Data).dst);
             else if (pkg.Type == PacketType.AODV_REPLY)
                 Console.WriteLine("{0:F4} [{1}] {2}{3} sends to {4}{5}({6}->{7}->{8})", time, pkg.Type, this.type, this.Id, pkg.NextType, (pkg.Next == -1 ? "all" : pkg.Next.ToString()), pkg.Src, pkg.Dst, ((AODVReply)pkg.Data).dst);
             else
