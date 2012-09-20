@@ -49,6 +49,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="PrivacyFrame.cs" />
     <Compile Include="PrivacyNeighbor.cs" />
     <Compile Include="PrivacyObjectNode.cs" />
     <Compile Include="PrivacyEventManager.cs" />

@@ -15,7 +15,7 @@ namespace LocationPrivacy
         [STAThread]
         static void Main(string[] args)
         {
-            SchedulerProducer.schedulerlConstructor = Scheduler.ProduceScheduler;
+            SchedulerProducer.schedulerlConstructor = PrivacyScheduler.ProduceScheduler;
             GlobalProducer.globalConstructor = PrivacyGlobal.ProduceGlobal;
             Global global = Global.getInstance();
 

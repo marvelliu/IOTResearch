@@ -16,7 +16,12 @@ namespace LocationPrivacy
 
         public float native2WaitingTimeout = 3f;
 
-        public int nativeMethod = 0;
+        //1: native
+        //2: native2
+        //3: our improved approach
+        public int method = 1;
+
+        public bool isBuildGroupPolicyStrict = false;
 
 
         new public static PrivacyGlobal ProduceGlobal()
@@ -34,8 +39,10 @@ namespace LocationPrivacy
                 longTTL = int.Parse(v[1]);
             else if (v[0] == "checkNewGroupTimeout")
                 checkNewGroupTimeout = float.Parse(v[1]);
-            else if (v[0] == "native")
-                nativeMethod = int.Parse(v[1]);
+            else if (v[0] == "build_group_policy_strict")
+                isBuildGroupPolicyStrict = bool.Parse(v[1]);
+            else if (v[0] == "method")
+                method = int.Parse(v[1]);
             else
                 base.ParseArgs(v);
         }

@@ -39,41 +39,17 @@ namespace AdHocBaseApp
 
     public class Event : IComparable
     {
-        float time;
-
-        public float Time
-        {
-            get { return time; }
-            set { time = value; }
-        }
-        EventType type;
-
-        public EventType Type
-        {
-            get { return type; }
-            set { type = value; }
-        }
-        Node node;
-
-        public Node Node
-        {
-            get { return node; }
-            set { node = value; }
-        }
-        object obj;
-
-        public object Obj
-        {
-            get { return obj; }
-            set { obj = value; }
-        }
+        public float Time;
+        public EventType Type;
+        public Node Node;
+        public object Obj;
 
         public Event(float time, EventType type, Node node, object obj)
         {
-            this.time = time;
-            this.type = type;
-            this.node = node;
-            this.obj = obj;
+            this.Time = time;
+            this.Type = type;
+            this.Node = node;
+            this.Obj = obj;
         }
 
         public int CompareTo(object obj)
@@ -81,9 +57,9 @@ namespace AdHocBaseApp
             if (!(obj is Event))
                 throw new ArgumentException("Argument not a evnet", "right");
             Event e = (Event)obj;
-            if (this.time > e.Time)
+            if (this.Time > e.Time)
                 return 1;
-            else if (this.time < e.Time)
+            else if (this.Time < e.Time)
                 return -1;
             else
                 return 0;

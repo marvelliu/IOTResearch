@@ -40,5 +40,11 @@ namespace LocationPrivacy
                     break;
             }
         }
+
+        public override void EndProcess()
+        {
+            base.EndProcess();
+            PrivacyReader.CalculateGroups();
+        }
     }
 }

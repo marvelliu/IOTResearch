@@ -1,16 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual Studio 2010
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LogicalPath", "LogicalLink\LogicalPath.csproj", "{D19DFFE7-5011-4D30-9E95-E3ACB20F0B07}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AdHocBaseApp", "AdHocForwardGUI\AdHocBaseApp.csproj", "{26937518-902C-44AD-B232-5D13F4F1BB66}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VANETs", "VANETs\VANETs.csproj", "{8DA75098-11A5-4690-AE01-06187A125D3F}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TrustArch", "TrustArch\TrustArch.csproj", "{A128CC2C-7FF1-4F4F-AA0B-6CE23D22791E}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NewTrustArch", "NewTrustArch\NewTrustArch.csproj", "{E056E779-4128-42B3-A8DE-3B88C3F18469}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LocationPrivacy", "LocationPrivacy\LocationPrivacy.csproj", "{19DFCF2B-3646-4447-B213-F6BFE7214D6E}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HeterogeneousForward", "HeterogeneousForward\HeterogeneousForward.csproj", "{4149704C-FEE2-416E-8BF3-A01F03E21590}"
@@ -19,32 +9,20 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MaliciousOrganizationDetect
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Test", "Test\Test.csproj", "{967B8A62-638D-429A-9C5F-E59692D00A7F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AdHocBaseApp", "AdHocForwardGUI\AdHocBaseApp.csproj", "{26937518-902C-44AD-B232-5D13F4F1BB66}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NewTrustArch", "NewTrustArch\NewTrustArch.csproj", "{E056E779-4128-42B3-A8DE-3B88C3F18469}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VANETs", "VANETs\VANETs.csproj", "{8DA75098-11A5-4690-AE01-06187A125D3F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TrustArch", "TrustArch\TrustArch.csproj", "{A128CC2C-7FF1-4F4F-AA0B-6CE23D22791E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x86 = Debug|x86
 		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{D19DFFE7-5011-4D30-9E95-E3ACB20F0B07}.Debug|x86.ActiveCfg = Debug|x86
-		{D19DFFE7-5011-4D30-9E95-E3ACB20F0B07}.Debug|x86.Build.0 = Debug|x86
-		{D19DFFE7-5011-4D30-9E95-E3ACB20F0B07}.Release|x86.ActiveCfg = Release|x86
-		{D19DFFE7-5011-4D30-9E95-E3ACB20F0B07}.Release|x86.Build.0 = Release|x86
-		{26937518-902C-44AD-B232-5D13F4F1BB66}.Debug|x86.ActiveCfg = Debug|x86
-		{26937518-902C-44AD-B232-5D13F4F1BB66}.Debug|x86.Build.0 = Debug|x86
-		{26937518-902C-44AD-B232-5D13F4F1BB66}.Release|x86.ActiveCfg = Release|x86
-		{26937518-902C-44AD-B232-5D13F4F1BB66}.Release|x86.Build.0 = Release|x86
-		{8DA75098-11A5-4690-AE01-06187A125D3F}.Debug|x86.ActiveCfg = Debug|x86
-		{8DA75098-11A5-4690-AE01-06187A125D3F}.Debug|x86.Build.0 = Debug|x86
-		{8DA75098-11A5-4690-AE01-06187A125D3F}.Release|x86.ActiveCfg = Release|x86
-		{8DA75098-11A5-4690-AE01-06187A125D3F}.Release|x86.Build.0 = Release|x86
-		{A128CC2C-7FF1-4F4F-AA0B-6CE23D22791E}.Debug|x86.ActiveCfg = Debug|x86
-		{A128CC2C-7FF1-4F4F-AA0B-6CE23D22791E}.Debug|x86.Build.0 = Debug|x86
-		{A128CC2C-7FF1-4F4F-AA0B-6CE23D22791E}.Release|x86.ActiveCfg = Release|x86
-		{A128CC2C-7FF1-4F4F-AA0B-6CE23D22791E}.Release|x86.Build.0 = Release|x86
-		{E056E779-4128-42B3-A8DE-3B88C3F18469}.Debug|x86.ActiveCfg = Debug|x86
-		{E056E779-4128-42B3-A8DE-3B88C3F18469}.Debug|x86.Build.0 = Debug|x86
-		{E056E779-4128-42B3-A8DE-3B88C3F18469}.Release|x86.ActiveCfg = Release|x86
-		{E056E779-4128-42B3-A8DE-3B88C3F18469}.Release|x86.Build.0 = Release|x86
 		{19DFCF2B-3646-4447-B213-F6BFE7214D6E}.Debug|x86.ActiveCfg = Debug|x86
 		{19DFCF2B-3646-4447-B213-F6BFE7214D6E}.Debug|x86.Build.0 = Debug|x86
 		{19DFCF2B-3646-4447-B213-F6BFE7214D6E}.Release|x86.ActiveCfg = Release|x86
@@ -61,6 +39,22 @@ Global
 		{967B8A62-638D-429A-9C5F-E59692D00A7F}.Debug|x86.Build.0 = Debug|x86
 		{967B8A62-638D-429A-9C5F-E59692D00A7F}.Release|x86.ActiveCfg = Release|x86
 		{967B8A62-638D-429A-9C5F-E59692D00A7F}.Release|x86.Build.0 = Release|x86
+		{26937518-902C-44AD-B232-5D13F4F1BB66}.Debug|x86.ActiveCfg = Debug|x86
+		{26937518-902C-44AD-B232-5D13F4F1BB66}.Debug|x86.Build.0 = Debug|x86
+		{26937518-902C-44AD-B232-5D13F4F1BB66}.Release|x86.ActiveCfg = Release|x86
+		{26937518-902C-44AD-B232-5D13F4F1BB66}.Release|x86.Build.0 = Release|x86
+		{E056E779-4128-42B3-A8DE-3B88C3F18469}.Debug|x86.ActiveCfg = Debug|x86
+		{E056E779-4128-42B3-A8DE-3B88C3F18469}.Debug|x86.Build.0 = Debug|x86
+		{E056E779-4128-42B3-A8DE-3B88C3F18469}.Release|x86.ActiveCfg = Release|x86
+		{E056E779-4128-42B3-A8DE-3B88C3F18469}.Release|x86.Build.0 = Release|x86
+		{8DA75098-11A5-4690-AE01-06187A125D3F}.Debug|x86.ActiveCfg = Debug|x86
+		{8DA75098-11A5-4690-AE01-06187A125D3F}.Debug|x86.Build.0 = Debug|x86
+		{8DA75098-11A5-4690-AE01-06187A125D3F}.Release|x86.ActiveCfg = Release|x86
+		{8DA75098-11A5-4690-AE01-06187A125D3F}.Release|x86.Build.0 = Release|x86
+		{A128CC2C-7FF1-4F4F-AA0B-6CE23D22791E}.Debug|x86.ActiveCfg = Debug|x86
+		{A128CC2C-7FF1-4F4F-AA0B-6CE23D22791E}.Debug|x86.Build.0 = Debug|x86
+		{A128CC2C-7FF1-4F4F-AA0B-6CE23D22791E}.Release|x86.ActiveCfg = Release|x86
+		{A128CC2C-7FF1-4F4F-AA0B-6CE23D22791E}.Release|x86.Build.0 = Release|x86
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

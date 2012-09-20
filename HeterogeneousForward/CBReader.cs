@@ -555,7 +555,7 @@ namespace HeterogeneousForward
                 return false;
 
             if (pkg.SrcSenderSeq < 0)//未定该数据包的id
-                initPacketSeq(pkg);
+                InitPacketSeq(pkg);
 
             string pkgId = pkg.getId();
             if (global.debug)
