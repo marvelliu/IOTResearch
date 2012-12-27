@@ -4,7 +4,6 @@ using System.Linq;
 using System.Windows.Forms;
 using AdHocBaseApp;
 using System.Diagnostics;
-using TrustArch;
 
 namespace NewTrustArch
 {

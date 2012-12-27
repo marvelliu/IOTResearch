@@ -120,6 +120,8 @@ namespace AdHocBaseApp
                 return "R" + Id;
             else if (type == NodeType.SERVER)
                 return "S" + Id;
+            else if (type == NodeType.TRUST_MANAGER)
+                return "TM" + Id;
             else
                 return "wrong type";
         }

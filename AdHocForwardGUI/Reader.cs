@@ -690,7 +690,7 @@ namespace AdHocBaseApp
                     Packet pkg1 = pkg.Clone() as Packet;
                     pkg1.Prev = Id;
                     pkg1.Next = entity.next;
-                    pkg1.PrevType = pkg.NextType = NodeType.READER;
+                    pkg1.NextType = pkg.NextType = NodeType.READER;
                     pkg1.TTL = Math.Max(entity.hops + 1, pkg.TTL);
                     SendPacketDirectly(scheduler.currentTime, pkg1);
                     return;
