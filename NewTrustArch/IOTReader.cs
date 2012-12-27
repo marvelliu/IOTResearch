@@ -742,6 +742,7 @@ namespace NewTrustArch
 
         public override void ProcessPacket(Packet pkg)
         {
+            /*
             if (pkg.PrevType == NodeType.OBJECT || pkg.PrevType == NodeType.READER)
             {
                 Node node = Node.getNode(pkg.Prev, pkg.PrevType);
@@ -750,10 +751,11 @@ namespace NewTrustArch
                 {
                     if (pkg.Next == Id)
                         Console.WriteLine("{0:F4} [{1}] {2}{3} Drop data of {4}{5} due to out of space.", scheduler.currentTime, pkg.Type, this.type, this.Id, node.type, node.Id);
-                    CheckPacketCount(pkg);
+                    //CheckPacketCount(pkg);
                     return;
                 }
-            }
+            }*/
+
             //Check the Phenomemon
             if (pkg.PrevType == NodeType.READER)
                 AddReceivePacketPhenomemon(pkg);
